@@ -8,7 +8,7 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-type Ctx = { params: { id: string } }
+type Ctx = { params: Promise<{ id: string }> }
 
 type BodyPatch = Partial<{
   name: string
@@ -65,7 +65,7 @@ export async function DELETE(_req: Request, ctx: Ctx) {
 
   let id: number
   try {
-    id = mustInt(ctx.params.id, "id")
+    id = mustInt((await ctx.params).id, "id")
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 400 })
   }

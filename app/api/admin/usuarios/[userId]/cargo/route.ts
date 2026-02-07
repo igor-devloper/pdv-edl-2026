@@ -13,14 +13,14 @@ function isCargo(v: unknown): v is Cargo {
   return v === "ADMIN" || v === "CAIXA" || v === "ESTOQUISTA" || v === "SUPPORT"
 }
 
-export async function PATCH(req: Request, ctx: { params: { userId: string } }) {
+export async function PATCH(req: Request, ctx: { params: Promise<{ userId: string }> }) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: "não autenticado" }, { status: 401 })
 
   const cargo = await getCargoUsuario()
   if (!isAdmin(cargo)) return NextResponse.json({ error: "sem permissão" }, { status: 403 })
 
-  const targetId = ctx.params.userId
+  const targetId = (await ctx.params).userId
   const raw = (await req.json().catch(() => null)) as unknown
   const role = (raw as Body | null)?.role
 

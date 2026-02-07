@@ -16,13 +16,13 @@ function str(v: any) {
   return String(v ?? "").trim()
 }
 
-export async function POST(req: Request, ctx: { params: { id: string } }) {
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: "não autenticado" }, { status: 401 })
   const cargo = await getCargoUsuario()
   if (!isAdmin(cargo)) return NextResponse.json({ error: "sem permissão" }, { status: 403 })
 
-  const productId = Number(ctx.params.id)
+  const productId = Number((await ctx.params).id)
   if (!Number.isFinite(productId) || productId <= 0) return NextResponse.json({ error: "id inválido" }, { status: 400 })
 
   try {
