@@ -30,13 +30,13 @@ function mustInt(v: any, name: string) {
   return Math.trunc(n)
 }
 
-export async function PATCH(req: Request, ctx: { params: { id: string } }) {
+export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: "não autenticado" }, { status: 401 })
   const cargo = await getCargoUsuario()
   if (!isAdmin(cargo)) return NextResponse.json({ error: "sem permissão" }, { status: 403 })
 
-  const id = Number(ctx.params.id)
+  const id = Number((await ctx.params).id)
   if (!Number.isFinite(id) || id <= 0) return NextResponse.json({ error: "id inválido" }, { status: 400 })
 
   try {
