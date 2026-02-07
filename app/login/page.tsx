@@ -5,14 +5,14 @@ import { redirect } from "next/navigation";
 export default async function Login() {
   const { userId } = await auth();
   if (userId) redirect('/');
-  
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-600 via-red-500 to-pink-500 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Decorative elements */}
       <div className="absolute top-10 left-10 w-32 h-32 bg-white/10 rounded-full blur-3xl"></div>
       <div className="absolute bottom-20 right-20 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
       <div className="absolute top-1/2 left-1/4 w-24 h-24 bg-white/5 rounded-full blur-2xl"></div>
-      
+
       {/* Logo - ajustado para mobile */}
       <div className="absolute top-4 left-4 sm:top-8 sm:left-8">
         <div className="flex items-center gap-2 sm:gap-3">
@@ -37,16 +37,14 @@ export default async function Login() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
               </div>
-              
-              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-                PDV EDL Minas
+
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+                "PDV" EDL Minas 🤑
               </h1>
               <p className="text-sm sm:text-base text-gray-600">
                 Sistema de Controle de Vendas
               </p>
-              <div className="inline-block mt-2 sm:mt-3 px-3 sm:px-4 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
-                1º LOTE ABERTO
-              </div>
+              
             </div>
 
             {/* Decorative line */}
@@ -62,7 +60,7 @@ export default async function Login() {
                   Acessar Sistema
                 </button>
               </SignInButton>
-              
+
               <SignUpButton mode="modal">
                 <button className="w-full bg-white border-2 border-red-600 text-red-600 hover:bg-red-50 rounded-full font-semibold text-sm sm:text-base md:text-lg h-11 sm:h-12 md:h-14 px-6 cursor-pointer transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-2">
                   <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -105,8 +103,9 @@ export default async function Login() {
             <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200 text-center">
               <p className="text-gray-500 text-[10px] sm:text-xs">
                 Sistema integrado ao indicador de<br />
-                Engajamento com o MEJ
+                Engajamento com o MEJ<br />
               </p>
+              <span className="text-xs font-bold">Criado por Igor-Dev 😎</span>
             </div>
           </div>
 
@@ -126,7 +125,7 @@ export default async function Login() {
             </div>
             <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Bem-vindo de volta!</h2>
             <p className="text-sm sm:text-base text-gray-600 mb-4">Acesso autorizado ao PDV</p>
-            <UserButton 
+            <UserButton
               afterSignOutUrl="/login"
               appearance={{
                 elements: {
@@ -140,12 +139,12 @@ export default async function Login() {
       </div>
 
       {/* Top right corner - ajustado para mobile */}
-      <div className="absolute top-4 right-4 sm:top-8 sm:right-8 text-white/90 text-right text-[10px] sm:text-xs md:text-sm font-medium">
+      {/* <div className="absolute top-4 right-4 sm:top-8 sm:right-8 text-white/90 text-right text-[10px] sm:text-xs md:text-sm font-medium">
         <p>NOSSA</p>
         <p>HISTÓRIA</p>
         <p>NOSSA</p>
         <p className="font-bold">IDENTIDADE</p>
-      </div>
+      </div> */}
     </div>
   );
 }
