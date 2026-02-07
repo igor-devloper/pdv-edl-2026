@@ -1,96 +1,84 @@
 import { NextResponse } from "next/server"
-import { auth } from "@clerk/nextjs/server"
+import { auth, clerkClient } from "@clerk/nextjs/server"
 import  prisma  from "@/lib/prisma"
-import { getCargoUsuario, isAdmin } from "@/lib/auth-server"
-import { PaymentMethod } from "@/lib/generated/prisma/enums"
 
-export const runtime = "nodejs"
-export const dynamic = "force-dynamic"
-export const revalidate = 0
+export async function GET() {
+  try {
+    const { userId } = await auth()
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-function isoHoje() {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
-  return `${y}-${m}-${day}`
-}
+    const sales = await prisma.sale.findMany({
+      where: { status: "PAID" },
+      include: { items: { include: { product: true } } },
+    })
 
-function centsToBRL(cents: number | null | undefined) {
-  return Number(((cents ?? 0) / 100).toFixed(2))
-}
+    const totalCents = sales.reduce((sum, s) => sum + s.totalCents, 0)
+    const total = totalCents / 100
+    const quantidade = sales.length
+    const ticketMedio = quantidade > 0 ? total / quantidade : 0
 
-export async function GET(req: Request) {
-  const { userId } = await auth()
-  if (!userId) return NextResponse.json({ error: "não autenticado" }, { status: 401 })
+    // Pagamentos
+    const pagamentos = Object.entries(
+      sales.reduce((acc, s) => {
+        acc[s.payment] = (acc[s.payment] || 0) + s.totalCents / 100
+        return acc
+      }, {} as Record<string, number>)
+    ).map(([metodo, total]) => ({
+      metodo: metodo as "PIX" | "CASH" | "CARD",
+      quantidade: sales.filter((s) => s.payment === metodo).length,
+      total,
+    }))
 
-  const cargo = await getCargoUsuario()
-  if (!isAdmin(cargo)) return NextResponse.json({ error: "sem permissão" }, { status: 403 })
+    // Top produtos
+    const prodMap: Record<number, { nome: string; quantidade: number; total: number }> = {}
+    for (const sale of sales) {
+      for (const item of sale.items) {
+        if (!prodMap[item.productId]) {
+          prodMap[item.productId] = { nome: item.product.name, quantidade: 0, total: 0 }
+        }
+        prodMap[item.productId].quantidade += item.qty
+        prodMap[item.productId].total += item.totalCents / 100
+      }
+    }
+    const topProdutos = Object.entries(prodMap)
+      .map(([id, data]) => ({ productId: Number(id), ...data }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5)
 
-  const { searchParams } = new URL(req.url)
-  const from = searchParams.get("from") ?? isoHoje()
-  const to = searchParams.get("to") ?? isoHoje()
+    // ✅ Top vendedores
+    const sellerMap: Record<string, { quantidade: number; total: number }> = {}
+    for (const sale of sales) {
+      if (!sellerMap[sale.sellerUserId]) {
+        sellerMap[sale.sellerUserId] = { quantidade: 0, total: 0 }
+      }
+      sellerMap[sale.sellerUserId].quantidade += 1
+      sellerMap[sale.sellerUserId].total += sale.totalCents / 100
+    }
 
-  const dtFrom = new Date(`${from}T00:00:00.000Z`)
-  const dtTo = new Date(`${to}T23:59:59.999Z`)
+    const client = await clerkClient()
+    const topVendedores = await Promise.all(
+      Object.entries(sellerMap)
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, 5)
+        .map(async ([userId, data]) => {
+          const user = await client.users.getUser(userId).catch(() => null)
+          return {
+            sellerUserId: userId,
+            sellerName: user?.firstName || user?.emailAddresses[0]?.emailAddress || "Desconhecido",
+            ...data,
+          }
+        })
+    )
 
-  const [qtdVendas, somaTotal, porPagamento, topItens] = await Promise.all([
-    prisma.sale.count({ where: { createdAt: { gte: dtFrom, lte: dtTo } } }),
-
-    prisma.sale.aggregate({
-      where: { createdAt: { gte: dtFrom, lte: dtTo } },
-      _sum: { totalCents: true },
-      _avg: { totalCents: true },
-    }),
-
-    prisma.sale.groupBy({
-      by: ["payment"],
-      where: { createdAt: { gte: dtFrom, lte: dtTo } },
-      _count: { _all: true },
-      _sum: { totalCents: true },
-      orderBy: { _sum: { totalCents: "desc" } },
-    }),
-
-    prisma.saleItem.groupBy({
-      by: ["productId"],
-      where: { sale: { createdAt: { gte: dtFrom, lte: dtTo } } },
-      _sum: { qty: true, totalCents: true },
-      orderBy: { _sum: { qty: "desc" } },
-      take: 10,
-    }),
-  ])
-
-  // Para nome do produto, busca os IDs do top e faz um lookup
-  const topIds = topItens.map((t) => t.productId)
-  const produtos = topIds.length
-    ? await prisma.product.findMany({
-        where: { id: { in: topIds } },
-        select: { id: true, name: true },
-      })
-    : []
-
-  const nomeById = new Map(produtos.map((p) => [p.id, p.name]))
-
-  return NextResponse.json({
-    periodo: { from, to },
-
-    vendas: {
-      quantidade: qtdVendas,
-      total: centsToBRL(somaTotal._sum.totalCents),
-      ticketMedio: centsToBRL(somaTotal._avg.totalCents),
-    },
-
-    pagamentos: porPagamento.map((p) => ({
-      metodo: p.payment as PaymentMethod,
-      quantidade: p._count._all,
-      total: centsToBRL(p._sum.totalCents),
-    })),
-
-    topProdutos: topItens.map((t) => ({
-      productId: t.productId,
-      nome: nomeById.get(t.productId) ?? `Produto ${t.productId}`,
-      quantidade: Number(t._sum.qty ?? 0),
-      total: centsToBRL(t._sum.totalCents),
-    })),
-  })
+    return NextResponse.json({
+      periodo: { from: "01/02", to: "07/02" },
+      vendas: { quantidade, total, ticketMedio },
+      pagamentos,
+      topProdutos,
+      topVendedores,
+    })
+  } catch (error) {
+    console.error(error)
+    return NextResponse.json({ error: "Internal error" }, { status: 500 })
+  }
 }

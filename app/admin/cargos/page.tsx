@@ -35,7 +35,7 @@ export default function AdminCargosPage() {
     if (!data?.users) return
     const next: Record<string, Cargo> = {}
     for (const u of data.users) {
-      next[u.id] = ((u.role || "CAIXA").toUpperCase() as Cargo)
+      next[u.id] = (u.role || "CAIXA").toUpperCase() as Cargo
     }
     setDraftRoles(next)
   }, [data?.users])
@@ -78,38 +78,37 @@ export default function AdminCargosPage() {
 
   return (
     <AdminGuard>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/30 via-white to-pink-50/30">
         <Header />
 
-        <main className="mx-auto w-full max-w-7xl p-4 lg:p-6 space-y-4">
+        <main className="mx-auto w-full max-w-7xl space-y-4 p-4 lg:p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <h1 className="text-xl font-semibold">Cargos</h1>
-              <p className="text-sm text-muted-foreground">Gerencie permissões por usuário</p>
+              <h1 className="text-2xl font-bold text-gray-900">Cargos</h1>
+              <p className="text-sm text-gray-600">Gerencia permissões por usuário</p>
             </div>
 
             <Input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar por nome, email, cargo..."
-              className="sm:max-w-xs rounded-xl"
+              placeholder="Buscar..."
+              className="rounded-full border-red-100 sm:max-w-xs"
             />
           </div>
 
-          {/* ✅ Mobile: cards | Desktop: grid */}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {usuarios.map((u) => {
-              const current = ((u.role || "CAIXA").toUpperCase() as Cargo)
+              const current = (u.role || "CAIXA").toUpperCase() as Cargo
               const draft = draftRoles[u.id] ?? current
               const mudou = draft !== current
 
               return (
-                <Card key={u.id} className="p-4 rounded-2xl">
+                <Card key={u.id} className="rounded-3xl border-red-100 p-4 shadow-md">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="font-semibold truncate">{u.nome}</p>
-                      <p className="text-xs text-muted-foreground truncate">{u.email ?? "-"}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="truncate font-bold text-gray-900">{u.nome}</p>
+                      <p className="truncate text-xs text-gray-500">{u.email ?? "-"}</p>
+                      <p className="mt-1 text-xs text-gray-600">
                         Atual: <b>{current}</b>
                       </p>
                     </div>
@@ -121,8 +120,8 @@ export default function AdminCargosPage() {
                           setDraftRoles((prev) => ({ ...prev, [u.id]: v as Cargo }))
                         }
                       >
-                        <SelectTrigger className="rounded-xl">
-                          <SelectValue placeholder="Selecione" />
+                        <SelectTrigger className="rounded-full">
+                          <SelectValue placeholder="Cargo" />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="ADMIN">ADMIN</SelectItem>
@@ -133,7 +132,7 @@ export default function AdminCargosPage() {
                       </Select>
 
                       <Button
-                        className="w-full mt-2 rounded-xl"
+                        className="mt-2 w-full rounded-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600"
                         disabled={!mudou || salvando === u.id}
                         onClick={() => salvarCargo(u.id)}
                       >
@@ -146,8 +145,8 @@ export default function AdminCargosPage() {
             })}
 
             {!usuarios.length && (
-              <Card className="p-8 rounded-2xl text-center text-muted-foreground">
-                Nenhum usuário encontrado.
+              <Card className="rounded-3xl p-8 text-center text-gray-400">
+                Nenhum usuário encontrado
               </Card>
             )}
           </div>

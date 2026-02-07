@@ -4,14 +4,15 @@ import useSWR from "swr"
 import { Header } from "@/components/header"
 import { AdminGuard } from "@/components/admin-guard"
 import { Card } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
+import { Trophy, TrendingUp } from "lucide-react"
 
 type DashboardResumo = {
   periodo: { from: string; to: string }
   vendas: { quantidade: number; total: number; ticketMedio: number }
   pagamentos: Array<{ metodo: "PIX" | "CASH" | "CARD"; quantidade: number; total: number }>
   topProdutos: Array<{ productId: number; nome: string; quantidade: number; total: number }>
+  topVendedores: Array<{ sellerUserId: string; sellerName: string; quantidade: number; total: number }>
 }
 
 type VendasResp = {
@@ -22,6 +23,7 @@ type VendasResp = {
     payment: "PIX" | "CASH" | "CARD"
     totalCents: number
     buyerName: string | null
+    sellerName: string
     itens: Array<{ nome: string; qty: number; totalCents: number }>
   }>
 }
@@ -41,105 +43,145 @@ export default function AdminDashboardPage() {
 
   return (
     <AdminGuard>
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-gradient-to-br from-red-50/30 via-white to-pink-50/30">
         <Header />
 
-        <main className="mx-auto w-full max-w-7xl p-4 lg:p-6 space-y-6">
-          <div className="flex items-end justify-between gap-3">
+        <main className="mx-auto w-full max-w-7xl space-y-4 sm:space-y-6 p-3 sm:p-4 lg:p-6">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 sm:gap-3">
             <div>
-              <h1 className="text-xl font-semibold">Dashboard</h1>
-              <p className="text-sm text-muted-foreground">Visão geral de vendas do evento</p>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h1>
+              <p className="text-xs sm:text-sm text-gray-600">Visão geral de vendas</p>
             </div>
             {data && (
-              <div className="text-xs text-muted-foreground">
-                Período: {data.periodo.from} a {data.periodo.to}
+              <div className="text-[10px] sm:text-xs font-medium text-gray-500">
+                📅 {data.periodo.from} a {data.periodo.to}
               </div>
             )}
           </div>
 
+          {/* Loading */}
           {!data && !error ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="h-28 rounded-2xl bg-muted animate-pulse" />
+                <div key={i} className="h-24 sm:h-28 animate-pulse rounded-2xl sm:rounded-3xl bg-gradient-to-br from-red-100 to-pink-100" />
               ))}
             </div>
           ) : error ? (
-            <Card className="p-4 rounded-2xl">Erro ao carregar dashboard.</Card>
+            <Card className="rounded-2xl sm:rounded-3xl p-4 sm:p-6 text-red-600 text-sm">Erro ao carregar dashboard</Card>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Card className="p-4 rounded-2xl">
-                  <p className="text-xs text-muted-foreground">Total vendido</p>
-                  <p className="text-2xl font-bold">{brl(data!.vendas.total)}</p>
+              {/* KPIs principais */}
+              <div className="grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-3">
+                <Card className="rounded-2xl sm:rounded-3xl border-red-100 bg-gradient-to-br from-red-50 to-pink-50 p-4 sm:p-6 shadow-md">
+                  <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wide text-gray-600">Total vendido</p>
+                  <p className="mt-1 text-2xl sm:text-3xl font-bold text-red-600">{brl(data!.vendas.total)}</p>
                 </Card>
-                <Card className="p-4 rounded-2xl">
-                  <p className="text-xs text-muted-foreground">Vendas</p>
-                  <p className="text-2xl font-bold">{data!.vendas.quantidade}</p>
+                <Card className="rounded-2xl sm:rounded-3xl border-red-100 bg-gradient-to-br from-red-50 to-pink-50 p-4 sm:p-6 shadow-md">
+                  <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wide text-gray-600">Vendas</p>
+                  <p className="mt-1 text-2xl sm:text-3xl font-bold text-red-600">{data!.vendas.quantidade}</p>
                 </Card>
-                <Card className="p-4 rounded-2xl">
-                  <p className="text-xs text-muted-foreground">Ticket médio</p>
-                  <p className="text-2xl font-bold">{brl(data!.vendas.ticketMedio)}</p>
+                <Card className="rounded-2xl sm:rounded-3xl border-red-100 bg-gradient-to-br from-red-50 to-pink-50 p-4 sm:p-6 shadow-md">
+                  <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wide text-gray-600">Ticket médio</p>
+                  <p className="mt-1 text-2xl sm:text-3xl font-bold text-red-600">{brl(data!.vendas.ticketMedio)}</p>
                 </Card>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                <Card className="p-4 rounded-2xl">
-                  <p className="text-sm font-semibold">Pagamentos</p>
-                  <Separator className="my-3" />
-                  <div className="space-y-2">
+              {/* Pagamentos + Top produtos */}
+              <div className="grid grid-cols-1 gap-2 sm:gap-3 lg:grid-cols-2">
+                <Card className="rounded-2xl sm:rounded-3xl border-red-100 p-4 sm:p-6 shadow-md">
+                  <div className="mb-3 sm:mb-4 flex items-center gap-2">
+                    <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
+                    <p className="text-sm sm:text-base font-bold text-gray-900">Pagamentos</p>
+                  </div>
+                  <div className="space-y-2 sm:space-y-3">
                     {data!.pagamentos.map((p) => (
-                      <div key={p.metodo} className="flex items-center justify-between text-sm">
+                      <div key={p.metodo} className="flex items-center justify-between rounded-xl sm:rounded-2xl bg-gradient-to-br from-red-50 to-pink-50 p-2.5 sm:p-3">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{p.metodo}</span>
-                          <span className="text-xs text-muted-foreground">{p.quantidade} vendas</span>
+                          <span className="text-sm sm:text-base font-bold text-gray-900">{p.metodo}</span>
+                          <span className="text-[10px] sm:text-xs text-gray-600">{p.quantidade} vendas</span>
                         </div>
-                        <span className="font-semibold">{brl(p.total)}</span>
+                        <span className="text-sm sm:text-base font-bold text-red-600">{brl(p.total)}</span>
                       </div>
                     ))}
                   </div>
                 </Card>
 
-                <Card className="p-4 rounded-2xl">
-                  <p className="text-sm font-semibold">Top produtos</p>
-                  <Separator className="my-3" />
-                  <div className="space-y-2">
+                <Card className="rounded-2xl sm:rounded-3xl border-red-100 p-4 sm:p-6 shadow-md">
+                  <div className="mb-3 sm:mb-4 flex items-center gap-2">
+                    <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-red-600" />
+                    <p className="text-sm sm:text-base font-bold text-gray-900">Top produtos</p>
+                  </div>
+                  <div className="space-y-2 sm:space-y-3">
                     {data!.topProdutos.map((t) => (
-                      <div key={t.productId} className="flex items-center justify-between text-sm">
+                      <div key={t.productId} className="flex items-center justify-between rounded-xl sm:rounded-2xl bg-gradient-to-br from-red-50 to-pink-50 p-2.5 sm:p-3">
                         <div className="min-w-0">
-                          <p className="truncate font-medium">{t.nome}</p>
-                          <p className="text-xs text-muted-foreground">{t.quantidade} un.</p>
+                          <p className="truncate text-sm sm:text-base font-bold text-gray-900">{t.nome}</p>
+                          <p className="text-[10px] sm:text-xs text-gray-600">{t.quantidade} vendidos</p>
                         </div>
-                        <span className="font-semibold">{brl(t.total)}</span>
+                        <span className="text-sm sm:text-base font-bold text-red-600">{brl(t.total)}</span>
                       </div>
                     ))}
                   </div>
                 </Card>
               </div>
 
-              <Card className="p-4 rounded-2xl">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold">Vendas recentes</p>
-                  <Badge variant="secondary">{vendasData?.vendas?.length ?? 0}</Badge>
-                </div>
-                <Separator className="my-3" />
+              {/* Top vendedores */}
+              {data!.topVendedores && data!.topVendedores.length > 0 && (
+                <Card className="rounded-2xl sm:rounded-3xl border-red-100 p-4 sm:p-6 shadow-md">
+                  <div className="mb-3 sm:mb-4 flex items-center gap-2">
+                    <Trophy className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600" />
+                    <p className="text-sm sm:text-base font-bold text-gray-900">Top vendedores</p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 sm:gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    {data!.topVendedores.map((v, idx) => (
+                      <div
+                        key={v.sellerUserId}
+                        className="flex items-center justify-between rounded-xl sm:rounded-2xl bg-gradient-to-br from-amber-50 to-orange-50 p-3 sm:p-4"
+                      >
+                        <div className="min-w-0 flex items-center gap-2">
+                          <span className="text-xl sm:text-2xl font-bold text-amber-600">#{idx + 1}</span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm sm:text-base font-bold text-gray-900">{v.sellerName}</p>
+                            <p className="text-[10px] sm:text-xs text-gray-600">{v.quantidade} vendas</p>
+                          </div>
+                        </div>
+                        <span className="text-base sm:text-lg font-bold text-amber-600">{brl(v.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
 
-                <div className="space-y-3">
+              {/* Vendas recentes */}
+              <Card className="rounded-2xl sm:rounded-3xl border-red-100 p-4 sm:p-6 shadow-md">
+                <div className="mb-3 sm:mb-4 flex items-center justify-between">
+                  <p className="text-sm sm:text-base font-bold text-gray-900">Vendas recentes</p>
+                  <Badge className="rounded-full bg-red-100 text-red-700 text-xs">
+                    {vendasData?.vendas?.length ?? 0}
+                  </Badge>
+                </div>
+
+                <div className="space-y-2 sm:space-y-3">
                   {(vendasData?.vendas || []).map((v) => (
-                    <div key={v.id} className="rounded-xl border p-3">
-                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div key={v.id} className="rounded-xl sm:rounded-2xl border border-red-100 bg-gradient-to-br from-red-50/50 to-pink-50/50 p-3 sm:p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
-                          <p className="font-semibold truncate">
-                            {v.buyerName ? v.buyerName : "Sem nome"}{" "}
-                            <span className="text-xs text-muted-foreground">• {v.code}</span>
+                          <p className="truncate text-sm sm:text-base font-bold text-gray-900">
+                            {v.buyerName ? v.buyerName : "Cliente"}
+                            <span className="ml-1.5 sm:ml-2 text-[10px] sm:text-xs font-normal text-gray-500">• {v.code}</span>
                           </p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-[10px] sm:text-xs text-gray-600">
                             {new Date(v.createdAt).toLocaleString("pt-BR")} • {v.payment}
                           </p>
+                          <p className="text-[10px] sm:text-xs font-semibold text-gray-700">
+                            Vendedor: {v.sellerName}
+                          </p>
                         </div>
-                        <div className="font-bold text-primary">{brlFromCents(v.totalCents)}</div>
+                        <div className="text-sm sm:text-base font-bold text-red-600">{brlFromCents(v.totalCents)}</div>
                       </div>
 
-                      <div className="mt-2 text-xs text-muted-foreground">
+                      <div className="mt-2 text-[10px] sm:text-xs text-gray-600">
                         {v.itens.slice(0, 3).map((it, idx) => (
                           <span key={idx}>
                             {it.qty}x {it.nome}
@@ -152,8 +194,8 @@ export default function AdminDashboardPage() {
                   ))}
 
                   {!vendasData?.vendas?.length && (
-                    <div className="text-sm text-muted-foreground text-center py-8">
-                      Nenhuma venda registrada ainda.
+                    <div className="rounded-xl sm:rounded-2xl border-2 border-dashed border-red-200 py-10 sm:py-12 text-center text-xs sm:text-sm text-gray-400">
+                      Nenhuma venda ainda
                     </div>
                   )}
                 </div>
