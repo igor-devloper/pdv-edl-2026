@@ -1,4 +1,3 @@
-// app/api/admin/produtos/route.ts
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@clerk/nextjs/server"
@@ -33,6 +32,7 @@ export async function GET() {
       id: true,
       sku: true,
       name: true,
+      imageUrl: true, // ✅ ADICIONADO
       priceCents: true,
       costCents: true,
       active: true,
@@ -60,6 +60,7 @@ export async function POST(req: Request) {
   try {
     const sku = mustStr(body.sku, "sku")
     const name = mustStr(body.name, "name")
+    const imageUrl = body.imageUrl || null // ✅ ADICIONADO
     const priceCents = mustInt(body.priceCents, "priceCents")
     const costCents = body.costCents == null ? null : mustInt(body.costCents, "costCents")
     const active = Boolean(body.active)
@@ -69,11 +70,20 @@ export async function POST(req: Request) {
     if (costCents != null && costCents < 0) throw new Error("costCents não pode ser negativo")
 
     const created = await prisma.product.create({
-      data: { sku, name, priceCents, costCents, active, stockOnHand },
+      data: { 
+        sku, 
+        name, 
+        imageUrl, // ✅ ADICIONADO
+        priceCents, 
+        costCents, 
+        active, 
+        stockOnHand 
+      },
       select: {
         id: true,
         sku: true,
         name: true,
+        imageUrl: true, // ✅ ADICIONADO
         priceCents: true,
         costCents: true,
         active: true,

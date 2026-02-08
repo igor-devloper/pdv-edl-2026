@@ -1,4 +1,3 @@
-// app/api/products/[id]/route.ts
 import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { getCargoUsuario, isAdmin, podeGerenciarEstoque } from "@/lib/auth-server"
@@ -9,16 +8,6 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 type Ctx = { params: Promise<{ id: string }> }
-
-type BodyPatch = Partial<{
-  name: string
-  description: string | null
-  price: number
-  stock: number
-  image_url: string | null
-  category: string | null
-  active: boolean
-}>
 
 function str(v: any) {
   return String(v ?? "").trim()
@@ -45,6 +34,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     const data: any = {}
     if (body.sku != null) data.sku = str(body.sku)
     if (body.name != null) data.name = str(body.name)
+    if (body.imageUrl !== undefined) data.imageUrl = body.imageUrl || null // ✅ ADICIONADO
     if (body.priceCents != null) data.priceCents = mustInt(body.priceCents, "priceCents")
     if (body.costCents !== undefined) data.costCents = body.costCents == null ? null : mustInt(body.costCents, "costCents")
     if (body.active != null) data.active = Boolean(body.active)

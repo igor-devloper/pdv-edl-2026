@@ -1,4 +1,3 @@
-// app/api/admin/produtos/[id]/route.ts
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { auth } from "@clerk/nextjs/server"
@@ -37,6 +36,7 @@ export async function GET(_: Request, ctx: Ctx) {
       id: true,
       sku: true,
       name: true,
+      imageUrl: true, // ✅ ADICIONADO
       priceCents: true,
       costCents: true,
       active: true,
@@ -71,6 +71,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
     if (body.sku != null) data.sku = mustStr(body.sku, "sku")
     if (body.name != null) data.name = mustStr(body.name, "name")
+    if (body.imageUrl !== undefined) data.imageUrl = body.imageUrl || null // ✅ ADICIONADO
 
     if (body.priceCents != null) {
       const n = mustInt(body.priceCents, "priceCents")
@@ -96,6 +97,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
         id: true,
         sku: true,
         name: true,
+        imageUrl: true, // ✅ ADICIONADO
         priceCents: true,
         costCents: true,
         active: true,

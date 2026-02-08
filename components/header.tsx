@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { UserButton, useUser } from "@clerk/nextjs"
-import { ShoppingBag, LayoutDashboard, Package, Users, AlertTriangle, Menu } from "lucide-react"
+import { ShoppingBag, LayoutDashboard, Package, Users, AlertTriangle, Menu, Receipt } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { getCargoFromUser, isAdminCargo } from "@/lib/cargo-client"
@@ -34,6 +34,23 @@ export function Header() {
         <ShoppingBag className="h-4 w-4" />
         <span>Vendas</span>
       </Link>
+
+      {/* ✅ NOVO: Link Minhas Vendas para CAIXA */}
+      {semCargo && (
+        <Link
+          href="/minhas-vendas"
+          onClick={() => setOpen(false)}
+          className={cn(
+            "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all",
+            pathname === "/minhas-vendas"
+              ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-md"
+              : "text-gray-600 hover:bg-red-50 hover:text-red-600"
+          )}
+        >
+          <Receipt className="h-4 w-4" />
+          <span>Minhas Vendas</span>
+        </Link>
+      )}
 
       {isAdmin && (
         <>
@@ -135,7 +152,7 @@ export function Header() {
           <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm text-amber-900">
             <AlertTriangle className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
             <span>
-              Você ainda <b>não tem cargo</b>. Chama um admin!
+              Você ainda <b>não tem cargo</b>. Chama um admin pra tu ficar fortão 💪!
             </span>
           </div>
         </div>

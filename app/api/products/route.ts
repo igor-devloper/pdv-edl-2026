@@ -7,7 +7,6 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-
 type ProdutoAPI = {
   id: number
   name: string
@@ -17,11 +16,13 @@ type ProdutoAPI = {
   image_url: string | null
   category: string | null
 }
+
 function asInt(v: any, name: string) {
   const n = Number(v)
   if (!Number.isFinite(n) || !Number.isInteger(n)) throw new Error(`${name} inválido`)
   return n
 }
+
 function str(v: any) {
   return String(v ?? "").trim()
 }
@@ -35,8 +36,7 @@ export async function GET() {
       name: true,
       priceCents: true,
       stockOnHand: true,
-      // no seu schema não existe description/category/image_url
-      // então vamos devolver null pra manter contrato do front
+      imageUrl: true, // ✅ ADICIONADO
     },
   })
 
@@ -45,7 +45,7 @@ export async function GET() {
     name: p.name,
     description: null,
     category: null,
-    image_url: null,
+    image_url: p.imageUrl, // ✅ MAPEADO
     price: Number((p.priceCents ?? 0) / 100),
     stock: Number(p.stockOnHand ?? 0),
   }))
@@ -64,6 +64,7 @@ export async function POST(req: Request) {
 
     const sku = str(body.sku)
     const name = str(body.name)
+    const imageUrl = body.imageUrl || null // ✅ ADICIONADO
     const priceCents = asInt(body.priceCents, "priceCents")
     const costCents = body.costCents == null ? null : asInt(body.costCents, "costCents")
     const active = body.active == null ? true : Boolean(body.active)
@@ -75,7 +76,15 @@ export async function POST(req: Request) {
     if (stockOnHand < 0) throw new Error("stockOnHand inválido")
 
     const created = await prisma.product.create({
-      data: { sku, name, priceCents, costCents, active, stockOnHand },
+      data: { 
+        sku, 
+        name, 
+        imageUrl, // ✅ ADICIONADO
+        priceCents, 
+        costCents, 
+        active, 
+        stockOnHand 
+      },
     })
 
     return NextResponse.json({ ok: true, produto: created })
