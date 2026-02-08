@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
-import  prisma from "@/lib/prisma"
+import prisma from "@/lib/prisma"
 
 export async function GET() {
   try {
@@ -17,7 +17,7 @@ export async function GET() {
       id: s.id,
       code: s.code,
       createdAt: s.createdAt.toISOString(),
-      updatedAt: s.updatedAt.toISOString() ?? new Date(),
+      updatedAt: (s.updatedAt ?? new Date()).toISOString(),
       payment: s.payment,
       totalCents: s.totalCents,
       buyerName: s.nomeComprador,
