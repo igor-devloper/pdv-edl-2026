@@ -6,6 +6,32 @@ import { AdminGuard } from "@/components/admin-guard"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Trophy, TrendingUp } from "lucide-react"
+import { useState } from "react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+
+type ClerkUser = {
+  id: string
+  nome: string
+  email: string | null
+  role: string | null
+  ativo: boolean
+}
+
+type Product = {
+  id: number
+  name: string
+  description: string | null
+  price: number
+  stock: number
+  image_url: string | null
+  category: string | null
+}
 
 type DashboardResumo = {
   periodo: { from: string; to: string }
@@ -38,8 +64,39 @@ function brl(v: number) {
 }
 
 export default function AdminDashboardPage() {
-  const { data, error } = useSWR<DashboardResumo>("/api/dashboard/resumo", fetcher, { refreshInterval: 8000 })
-  const { data: vendasData } = useSWR<VendasResp>("/api/admin/vendas?take=20", fetcher, { refreshInterval: 8000 })
+  const [sellerUserId, setSellerUserId] = useState("")
+  const [productId, setProductId] = useState("")
+  const [minValue, setMinValue] = useState("")
+  const [maxValue, setMaxValue] = useState("")
+
+  const query = new URLSearchParams({
+    ...(sellerUserId && { sellerUserId }),
+    ...(productId && { productId }),
+    ...(minValue && { minValue }),
+    ...(maxValue && { maxValue }),
+  }).toString()
+
+  const { data: usersData } = useSWR<{ users: ClerkUser[] }>(
+    "/api/admin/usuarios",
+    fetcher
+  )
+
+  const { data: productsData } = useSWR<Product[]>(
+    "/api/products",
+    fetcher
+  )
+
+  const { data, error } = useSWR<DashboardResumo>(
+    `/api/dashboard/resumo?${query}`,
+    fetcher,
+    { refreshInterval: 8000 }
+  )
+
+  const { data: vendasData } = useSWR<VendasResp>(
+    `/api/admin/vendas?take=20&${query}`,
+    fetcher,
+    { refreshInterval: 8000 }
+  )
 
   return (
     <AdminGuard>
@@ -47,18 +104,91 @@ export default function AdminDashboardPage() {
         <Header />
 
         <main className="mx-auto w-full max-w-7xl space-y-4 sm:space-y-6 p-3 sm:p-4 lg:p-6">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 sm:gap-3">
+          {/* Header com título e período */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Dashboard</h1>
               <p className="text-xs sm:text-sm text-gray-600">Visão geral de vendas</p>
             </div>
             {data && (
-              <div className="text-[10px] sm:text-xs font-medium text-gray-500">
+              <div className="text-xs sm:text-sm font-medium text-gray-500">
                 📅 {data.periodo.from} a {data.periodo.to}
               </div>
             )}
           </div>
+
+          {/* Card de Filtros */}
+          <Card className="rounded-2xl sm:rounded-3xl border-red-100 p-4 sm:p-6 shadow-md">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              {/* VENDEDOR */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                  Vendedor
+                </label>
+                <Select value={sellerUserId} onValueChange={setSellerUserId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Todos os vendedores" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* <SelectItem value="">Todos os vendedores</SelectItem> */}
+                    {usersData?.users.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* PRODUTO */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                  Produto
+                </label>
+                <Select value={productId} onValueChange={setProductId}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Todos os produtos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* <SelectItem value="">Todos os produtos</SelectItem> */}
+                    {productsData?.map((p) => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* VALOR MÍNIMO */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                  Valor mínimo
+                </label>
+                <input
+                  type="number"
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                  placeholder="R$ 0,00"
+                  value={minValue}
+                  onChange={(e) => setMinValue(e.target.value)}
+                />
+              </div>
+
+              {/* VALOR MÁXIMO */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                  Valor máximo
+                </label>
+                <input
+                  type="number"
+                  className="w-full rounded-xl border border-gray-300 px-3 py-2 text-sm focus:border-red-500 focus:outline-none focus:ring-2 focus:ring-red-500/20"
+                  placeholder="R$ 999,99"
+                  value={maxValue}
+                  onChange={(e) => setMaxValue(e.target.value)}
+                />
+              </div>
+            </div>
+          </Card>
 
           {/* Loading */}
           {!data && !error ? (

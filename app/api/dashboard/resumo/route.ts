@@ -1,21 +1,50 @@
 import { NextResponse } from "next/server"
 import { auth, clerkClient } from "@clerk/nextjs/server"
-import  prisma  from "@/lib/prisma"
+import prisma from "@/lib/prisma"
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const { userId } = await auth()
-    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const url = new URL(req.url)
+
+    const sellerUserId = url.searchParams.get("sellerUserId")
+    const productId = url.searchParams.get("productId")
+    const minValue = Number(url.searchParams.get("minValue") || 0) * 100
+    const maxValue = Number(url.searchParams.get("maxValue") || 0) * 100
 
     const sales = await prisma.sale.findMany({
-      where: { status: "PAID" },
-      include: { items: { include: { product: true } } },
+      where: {
+        status: "PAID",
+        ...(sellerUserId && { sellerUserId }),
+        ...(minValue || maxValue
+          ? {
+              totalCents: {
+                ...(minValue && { gte: minValue }),
+                ...(maxValue && { lte: maxValue }),
+              },
+            }
+          : {}),
+        ...(productId && {
+          items: {
+            some: {
+              productId: Number(productId),
+            },
+          },
+        }),
+      },
+      include: {
+        items: { include: { product: true } },
+      },
     })
 
     const totalCents = sales.reduce((sum, s) => sum + s.totalCents, 0)
     const total = totalCents / 100
     const quantidade = sales.length
-    const ticketMedio = quantidade > 0 ? total / quantidade : 0
+    const ticketMedio = quantidade ? total / quantidade : 0
 
     // Pagamentos
     const pagamentos = Object.entries(
@@ -40,18 +69,19 @@ export async function GET() {
         prodMap[item.productId].total += item.totalCents / 100
       }
     }
+
     const topProdutos = Object.entries(prodMap)
       .map(([id, data]) => ({ productId: Number(id), ...data }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 5)
 
-    // ✅ Top vendedores
+    // Top vendedores
     const sellerMap: Record<string, { quantidade: number; total: number }> = {}
     for (const sale of sales) {
       if (!sellerMap[sale.sellerUserId]) {
         sellerMap[sale.sellerUserId] = { quantidade: 0, total: 0 }
       }
-      sellerMap[sale.sellerUserId].quantidade += 1
+      sellerMap[sale.sellerUserId].quantidade++
       sellerMap[sale.sellerUserId].total += sale.totalCents / 100
     }
 
@@ -60,11 +90,14 @@ export async function GET() {
       Object.entries(sellerMap)
         .sort((a, b) => b[1].total - a[1].total)
         .slice(0, 5)
-        .map(async ([userId, data]) => {
-          const user = await client.users.getUser(userId).catch(() => null)
+        .map(async ([id, data]) => {
+          const user = await client.users.getUser(id).catch(() => null)
           return {
-            sellerUserId: userId,
-            sellerName: user?.firstName || user?.emailAddresses[0]?.emailAddress || "Desconhecido",
+            sellerUserId: id,
+            sellerName:
+              user?.firstName ||
+              user?.emailAddresses[0]?.emailAddress ||
+              "Desconhecido",
             ...data,
           }
         })
