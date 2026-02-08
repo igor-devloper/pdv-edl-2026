@@ -17,7 +17,7 @@ export async function GET() {
       id: s.id,
       code: s.code,
       createdAt: s.createdAt.toISOString(),
-      updatedAt: s.updatedAt.toISOString(),
+      updatedAt: s.updatedAt.toISOString() ?? new Date(),
       payment: s.payment,
       totalCents: s.totalCents,
       buyerName: s.nomeComprador,
