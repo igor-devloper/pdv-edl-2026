@@ -1,6 +1,7 @@
 import { SignedOut, SignInButton, SignUpButton, SignedIn, UserButton } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import Image from "next/image";
 
 export default async function Login() {
   const { userId } = await auth();
@@ -16,9 +17,10 @@ export default async function Login() {
       {/* Logo - ajustado para mobile */}
       <div className="absolute top-4 left-4 sm:top-8 sm:left-8">
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="w-10 h-10 sm:w-12 sm:h-12 border-2 border-white/50 rounded-lg flex items-center justify-center">
+          {/* <div className="w-10 h-10 sm:w-12 sm:h-12 border-2 border-white/50 rounded-lg flex items-center justify-center">
             <div className="w-6 h-6 sm:w-8 sm:h-8 border border-white/70 rounded"></div>
-          </div>
+          </div> */}
+          <Image alt="Logo" src="/logo.png" width={200} height={200}/>
           <div className="text-white">
             <div className="font-bold text-base sm:text-xl">EDL MINAS</div>
             <div className="text-[10px] sm:text-xs font-medium opacity-90">Sistema PDV</div>

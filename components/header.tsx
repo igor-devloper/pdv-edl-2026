@@ -7,6 +7,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { getCargoFromUser, isAdminCargo } from "@/lib/cargo-client"
 import { useState } from "react"
+import Image from "next/image"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 
@@ -35,7 +36,6 @@ export function Header() {
         <span>Vendas</span>
       </Link>
 
-      {/* ✅ NOVO: Link Minhas Vendas para CAIXA */}
       {semCargo && (
         <Link
           href="/minhas-vendas"
@@ -104,15 +104,16 @@ export function Header() {
     <header className="sticky top-0 z-50 border-b border-red-100 bg-white/95 backdrop-blur-lg">
       <div className="mx-auto flex h-14 sm:h-16 items-center justify-between px-3 sm:px-4 max-w-7xl">
         {/* Logo */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-red-600 to-red-500 shadow-md">
-            <ShoppingBag className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-sm sm:text-lg font-bold leading-tight text-gray-900">PDV EDL</h1>
-            <p className="text-[10px] sm:text-xs font-medium leading-none text-gray-500">EDL Minas</p>
-          </div>
-        </div>
+        <Link href="/" className="flex items-center">
+          <Image
+            src="/logo.png"
+            alt="EDL Minas"
+            width={140}
+            height={50}
+            className="h-9 sm:h-11 w-auto object-contain"
+            style={{ filter: "invert(1)" }} // torna o branco em preto p/ combinar com header claro
+          />
+        </Link>
 
         {/* Desktop Nav */}
         <nav className="hidden md:flex items-center gap-2">
