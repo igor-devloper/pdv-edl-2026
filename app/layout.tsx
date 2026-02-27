@@ -3,6 +3,7 @@ import { Mulish } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Toaster } from "@/components/ui/sonner";
+import { Analytics } from "@vercel/analytics/next"
 
 const mulish = Mulish({
   subsets: ["latin-ext"],
@@ -25,10 +26,11 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en">
         <body className={`${mulish.className}  antialiased`}>
-           <Toaster richColors/>
+          <Toaster richColors />
           {children}
+          <Analytics />
         </body>
       </html>
-    </ClerkProvider>  
+    </ClerkProvider>
   );
 }
