@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { UserButton, useUser } from "@clerk/nextjs"
-import { ShoppingBag, LayoutDashboard, Package, Users, AlertTriangle, Menu, Receipt } from "lucide-react"
+import { ShoppingBag, LayoutDashboard, Package, Users, AlertTriangle, Menu, Receipt, PieChart } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { getCargoFromUser, isAdminCargo } from "@/lib/cargo-client"
@@ -19,9 +19,11 @@ export function Header() {
   const cargo = getCargoFromUser(user)
   const isAdmin = isAdminCargo(cargo)
   const semCargo = isLoaded && !!user && cargo === ""
+  const logado = isLoaded && !!user
 
   const NavLinks = () => (
     <>
+      {/* PDV — visível para todos */}
       <Link
         href="/"
         onClick={() => setOpen(false)}
@@ -36,7 +38,8 @@ export function Header() {
         <span>Vendas</span>
       </Link>
 
-      {semCargo && (
+      {/* Minhas Vendas — visível para TODOS os logados (com ou sem cargo) */}
+      {logado && (
         <Link
           href="/minhas-vendas"
           onClick={() => setOpen(false)}
@@ -52,6 +55,7 @@ export function Header() {
         </Link>
       )}
 
+      {/* Links exclusivos ADMIN */}
       {isAdmin && (
         <>
           <Link
@@ -95,6 +99,20 @@ export function Header() {
             <Users className="h-4 w-4" />
             <span>Cargos</span>
           </Link>
+
+          <Link
+            href="/admin/nucleos"
+            onClick={() => setOpen(false)}
+            className={cn(
+              "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all",
+              pathname.startsWith("/admin/nucleos")
+                ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-md"
+                : "text-gray-600 hover:bg-red-50 hover:text-red-600"
+            )}
+          >
+            <PieChart className="h-4 w-4" />
+            <span>Núcleos</span>
+          </Link>
         </>
       )}
     </>
@@ -111,7 +129,7 @@ export function Header() {
             width={140}
             height={50}
             className="h-9 sm:h-11 w-auto object-contain"
-            style={{ filter: "invert(1)" }} // torna o branco em preto p/ combinar com header claro
+            style={{ filter: "invert(1)" }}
           />
         </Link>
 

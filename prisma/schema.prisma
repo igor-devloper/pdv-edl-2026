@@ -37,11 +37,12 @@ model Sale {
   sellerUserId  String // Clerk userId
   status        SaleStatus    @default(PAID)
   nomeComprador String?
+  nucleo        String?
   totalCents    Int
   payment       PaymentMethod
 
   createdAt DateTime   @default(now())
-  updatedAt DateTime?   @updatedAt // ✅ NOVO: para rastrear edições
+  updatedAt DateTime?  @updatedAt // ✅ NOVO: para rastrear edições
   items     SaleItem[]
 }
 

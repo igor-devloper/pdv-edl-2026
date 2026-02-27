@@ -154,8 +154,9 @@ export default function PaginaPDVClient() {
 
   const limparCarrinho = useCallback(() => setCarrinho([]), [])
 
+  // ─── finalizarVenda agora recebe também o núcleo ──────────────────────────
   const finalizarVenda = useCallback(
-    async (formaPagamentoUI: FormaPagamentoUI, buyerName: string) => {
+    async (formaPagamentoUI: FormaPagamentoUI, buyerName: string, nucleo: string) => {
       if (carrinho.length === 0) return
       setCheckoutCarregando(true)
 
@@ -163,6 +164,8 @@ export default function PaginaPDVClient() {
         const payload = {
           payment: mapFormaPagamento(formaPagamentoUI),
           buyerName: buyerName?.trim() ? buyerName.trim() : null,
+          // Envia nucleo ao backend; use "nao_informado" como fallback
+          nucleo: nucleo && nucleo !== "nao_informado" ? nucleo : null,
           items: carrinho.map((i) => ({ productId: i.id, qty: i.quantidade })),
         }
 

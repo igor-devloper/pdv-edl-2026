@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
-import prisma  from "@/lib/prisma"
+import prisma from "@/lib/prisma"
 import { Prisma } from "@/lib/generated/prisma/client"
 
 export const runtime = "nodejs"
@@ -9,7 +9,12 @@ export const revalidate = 0
 
 type Payment = "PIX" | "CASH" | "CARD"
 type SaleItemInput = { productId: number; qty: number }
-type SaleCreateBody = { payment: Payment; buyerName?: string | null; items: SaleItemInput[] }
+type SaleCreateBody = {
+  payment: Payment
+  buyerName?: string | null
+  nucleo?: string | null
+  items: SaleItemInput[]
+}
 
 type ProdutoRow = { id: number; priceCents: number; stockOnHand: number }
 
@@ -28,12 +33,18 @@ function parsePayment(v: unknown): Payment {
 }
 function parseBody(raw: unknown): SaleCreateBody {
   if (!isRecord(raw)) throw new Error("payload inválido")
+
   const payment = parsePayment(raw.payment)
 
-  const buyerNameRaw = isRecord(raw) ? (raw.buyerName as any) : null
-  const buyerName = buyerNameRaw == null ? null : String(buyerNameRaw).trim()
+  const buyerName =
+    raw.buyerName == null ? null : String(raw.buyerName).trim() || null
 
-  if (!Array.isArray(raw.items) || raw.items.length === 0) throw new Error("items é obrigatório")
+  // nucleo: string opcional, limpo e truncado em 100 chars
+  const nucleo =
+    raw.nucleo == null ? null : String(raw.nucleo).trim().slice(0, 100) || null
+
+  if (!Array.isArray(raw.items) || raw.items.length === 0)
+    throw new Error("items é obrigatório")
 
   const items: SaleItemInput[] = raw.items.map((it, idx) => {
     if (!isRecord(it)) throw new Error(`items[${idx}] inválido`)
@@ -43,8 +54,9 @@ function parseBody(raw: unknown): SaleCreateBody {
     return { productId, qty }
   })
 
-  return { payment, buyerName: buyerName || null, items }
+  return { payment, buyerName, nucleo, items }
 }
+
 function genCode(): string {
   const d = new Date()
   const y = d.getFullYear()
@@ -95,6 +107,7 @@ export async function POST(req: Request) {
           payment: body.payment,
           totalCents,
           nomeComprador: body.buyerName ?? null,
+          nucleo: body.nucleo ?? null,          // ← campo novo
           items: {
             create: body.items.map((it) => {
               const p = byId.get(it.productId)!
@@ -129,11 +142,29 @@ export async function POST(req: Request) {
       return created
     })
 
-    return NextResponse.json({ ok: true, sale })
+    return NextResponse.json({
+      ok: true,
+      sale: {
+        id: sale.id,
+        code: sale.code,
+        payment: sale.payment,
+        totalCents: sale.totalCents,
+        nucleo: sale.nucleo,
+        createdAt: sale.createdAt,
+        items: sale.items.map((it) => ({
+          productId: it.productId,
+          qty: it.qty,
+          unitCents: it.unitCents,
+          totalCents: it.totalCents,
+        })),
+      },
+    })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "erro interno"
-    if (msg.startsWith("PRODUTO_NAO_ENCONTRADO:")) return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })
-    if (msg.startsWith("ESTOQUE_INSUFICIENTE:")) return NextResponse.json({ error: "Estoque insuficiente" }, { status: 409 })
+    if (msg.startsWith("PRODUTO_NAO_ENCONTRADO:"))
+      return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })
+    if (msg.startsWith("ESTOQUE_INSUFICIENTE:"))
+      return NextResponse.json({ error: "Estoque insuficiente" }, { status: 409 })
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
