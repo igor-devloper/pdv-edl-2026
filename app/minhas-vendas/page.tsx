@@ -39,6 +39,12 @@ type Venda = {
 // ─── Núcleos (mesma lista do cart-panel) ─────────────────────────────────────
 const NUCLEOS = [
   "Núcleo da Mata",
+  "Núcleo Central",
+  "Núcleo Sul",
+  "Núcleo Norte",
+  "Núcleo Triângulo",
+  "Núcleo Vale do Aço",
+  "Núcleo Vertentes",
   "Outro / Externo",
 ] as const
 
