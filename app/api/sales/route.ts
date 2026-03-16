@@ -13,7 +13,6 @@ function mustInt(v: any, name: string) {
   return n
 }
 
-// Gera código único da venda, ex: EDL-000123
 async function gerarCodigo(): Promise<string> {
   const last = await prisma.sale.findFirst({
     orderBy: { id: "desc" },
@@ -27,7 +26,6 @@ export async function POST(req: Request) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: "não autenticado" }, { status: 401 })
 
-  // Qualquer usuário autenticado pode registrar venda
   await getCargoUsuario()
 
   let body: any
@@ -37,24 +35,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 })
   }
 
-  const { payment, buyerName, nucleo, items, descontoVendaPct } = body
+  const { payment, buyerName, nucleo, items, descontoVendaCents } = body
 
   if (!["PIX", "CASH", "CARD"].includes(payment)) {
     return NextResponse.json({ error: "payment inválido" }, { status: 400 })
   }
-
   if (!Array.isArray(items) || items.length === 0) {
     return NextResponse.json({ error: "items obrigatório" }, { status: 400 })
   }
 
-  // descontoVendaPct: percentual inteiro 0–100 (opcional)
-  const descontoPct = descontoVendaPct != null
-    ? Math.min(100, Math.max(0, Number(descontoVendaPct) || 0))
+  // Desconto de venda: valor fixo em centavos (>= 0)
+  const descontoCents = descontoVendaCents != null
+    ? Math.max(0, Math.round(Number(descontoVendaCents) || 0))
     : 0
 
   try {
     const sale = await prisma.$transaction(async (tx) => {
-      // 1. Verifica estoque e calcula valores para cada item
+      // 1. Valida estoque e monta itens
       const saleItems: Array<{
         productId: number
         qty: number
@@ -72,8 +69,8 @@ export async function POST(req: Request) {
           select: { id: true, priceCents: true, desconto: true, stockOnHand: true, active: true },
         })
 
-        if (!produto || !produto.active) throw new Error(`produto ${productId} não encontrado`)
-        if (produto.stockOnHand < qty) throw new Error(`estoque insuficiente para produto ${productId}`)
+        if (!produto || !produto.active) throw new Error(`Produto ${productId} não encontrado`)
+        if (produto.stockOnHand < qty) throw new Error(`Estoque insuficiente para produto ${productId}`)
 
         // Se o frontend enviou unitCents (preço já com desconto de produto), usa esse valor.
         // Senão, recalcula a partir do priceCents + desconto do produto.
@@ -95,16 +92,14 @@ export async function POST(req: Request) {
         })
       }
 
-      // 2. Calcula subtotal dos itens
+      // 2. Subtotal dos itens
       const subtotalCents = saleItems.reduce((s, i) => s + i.totalCents, 0)
 
-      // 3. Aplica desconto de venda
-      const descontoVendaCents = descontoPct > 0
-        ? Math.round(subtotalCents * (descontoPct / 100))
-        : 0
-      const totalCents = Math.max(0, subtotalCents - descontoVendaCents)
+      // 3. Aplica desconto de venda (valor fixo) — não pode ultrapassar o subtotal
+      const descontoAplicado = Math.min(descontoCents, subtotalCents)
+      const totalCents = Math.max(0, subtotalCents - descontoAplicado)
 
-      // 4. Cria a venda
+      // 4. Cria venda
       const code = await gerarCodigo()
 
       const novaSale = await tx.sale.create({
@@ -115,12 +110,9 @@ export async function POST(req: Request) {
           nomeComprador: buyerName || null,
           nucleo: nucleo || null,
           totalCents,
-          // Armazena o desconto de venda no registro para relatórios
-          // (garanta que o campo existe no schema — veja abaixo)
-          ...(descontoPct > 0 ? { descontoVendaPct: descontoPct } : {}),
-          items: {
-            create: saleItems,
-          },
+          // Armazena desconto de venda em centavos para relatórios
+          ...(descontoAplicado > 0 ? { descontoVendaCents: descontoAplicado } : {}),
+          items: { create: saleItems },
         },
         include: { items: true },
       })
@@ -131,7 +123,6 @@ export async function POST(req: Request) {
           where: { id: item.productId },
           data: { stockOnHand: { decrement: item.qty } },
         })
-
         await tx.stockMovement.create({
           data: {
             productId: item.productId,

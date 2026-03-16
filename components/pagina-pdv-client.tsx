@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input"
 import { toast } from "sonner"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 
 type ProdutoAPI = {
   id: number
@@ -21,7 +20,7 @@ type ProdutoAPI = {
   stock: number
   image_url: string | null
   category: string | null
-  discount: number // percentual 0–100, vem do backend
+  discount: number // percentual 0–100
 }
 
 type ProductsApiResponse = ProdutoAPI[] | { products: ProdutoAPI[] }
@@ -68,7 +67,7 @@ function adaptProduto(p: ProdutoAPI): Produto {
     estoque: Number(p.stock),
     imagemUrl: p.image_url,
     categoria: p.category,
-    desconto: Number(p.discount ?? 0), // percentual 0–100
+    desconto: Number(p.discount ?? 0),
   }
 }
 
@@ -91,7 +90,6 @@ export default function PaginaPDVClient() {
   const [busca, setBusca] = useState("")
   const [checkoutCarregando, setCheckoutCarregando] = useState(false)
   const [cartOpen, setCartOpen] = useState(false)
-
   const [dialogOpen, setDialogOpen] = useState(false)
   const [vendaConcluida, setVendaConcluida] = useState<SaleReceipt | null>(null)
 
@@ -128,7 +126,6 @@ export default function PaginaPDVClient() {
         return prev
       }
 
-      // Calcula preço final com desconto do produto
       const precoFinal = produto.desconto > 0
         ? produto.preco * (1 - produto.desconto / 100)
         : produto.preco
@@ -176,7 +173,7 @@ export default function PaginaPDVClient() {
       formaPagamentoUI: FormaPagamentoUI,
       buyerName: string,
       nucleo: string,
-      descontoVenda: number // percentual 0–100
+      descontoVendaCents: number // valor fixo em centavos
     ) => {
       if (carrinho.length === 0) return
       setCheckoutCarregando(true)
@@ -186,12 +183,10 @@ export default function PaginaPDVClient() {
           payment: mapFormaPagamento(formaPagamentoUI),
           buyerName: buyerName?.trim() ? buyerName.trim() : null,
           nucleo: nucleo && nucleo !== "nao_informado" ? nucleo : null,
-          // Desconto de venda em percentual (inteiro 0–100)
-          descontoVendaPct: descontoVenda > 0 ? descontoVenda : null,
+          descontoVendaCents: descontoVendaCents > 0 ? descontoVendaCents : null,
           items: carrinho.map((i) => ({
             productId: i.id,
             qty: i.quantidade,
-            // Envia o preço final (já com desconto de produto) para o backend calcular corretamente
             unitCents: Math.round(i.precoFinal * 100),
           })),
         }
@@ -247,16 +242,12 @@ export default function PaginaPDVClient() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         sale={vendaConcluida}
-        onNovaVenda={() => {
-          setVendaConcluida(null)
-          setDialogOpen(false)
-        }}
+        onNovaVenda={() => { setVendaConcluida(null); setDialogOpen(false) }}
       />
 
       <main className="mx-auto flex w-full max-w-7xl flex-1 gap-6 p-3 sm:p-4 lg:p-6">
         {/* Produtos */}
         <div className="flex flex-1 flex-col gap-3 sm:gap-4 pb-20 lg:pb-0">
-          {/* Busca */}
           <div className="relative">
             <Search className="absolute left-3 sm:left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <Input
@@ -267,7 +258,6 @@ export default function PaginaPDVClient() {
             />
           </div>
 
-          {/* Loading skeleton */}
           {!produtosRaw ? (
             <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3 lg:grid-cols-3">
               {Array.from({ length: 6 }).map((_, i) => (
@@ -316,18 +306,17 @@ export default function PaginaPDVClient() {
         </aside>
       </main>
 
-      {/* Carrinho mobile - BOTTOM BAR + SHEET */}
+      {/* Carrinho mobile */}
       {carrinho.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-40 lg:hidden">
           <div className="border-t border-red-100 bg-white/95 backdrop-blur-lg p-3 shadow-lg">
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-semibold text-gray-600">{totalItens} {totalItens === 1 ? 'item' : 'itens'}</p>
+                <p className="text-xs font-semibold text-gray-600">{totalItens} {totalItens === 1 ? "item" : "itens"}</p>
                 <p className="text-lg sm:text-xl font-bold text-red-600 truncate">
                   R$ {totalCarrinho.toFixed(2).replace(".", ",")}
                 </p>
               </div>
-
               <Sheet open={cartOpen} onOpenChange={setCartOpen}>
                 <SheetTrigger asChild>
                   <Button className="rounded-full bg-gradient-to-r from-red-600 to-red-500 px-4 sm:px-6 py-5 sm:py-6 font-bold text-white shadow-lg transition-all hover:from-red-700 hover:to-red-600 text-sm sm:text-base">
