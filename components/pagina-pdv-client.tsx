@@ -21,6 +21,7 @@ type ProdutoAPI = {
   stock: number
   image_url: string | null
   category: string | null
+  discount: number // percentual 0–100, vem do backend
 }
 
 type ProductsApiResponse = ProdutoAPI[] | { products: ProdutoAPI[] }
@@ -67,6 +68,7 @@ function adaptProduto(p: ProdutoAPI): Produto {
     estoque: Number(p.stock),
     imagemUrl: p.image_url,
     categoria: p.category,
+    desconto: Number(p.discount ?? 0), // percentual 0–100
   }
 }
 
@@ -126,13 +128,28 @@ export default function PaginaPDVClient() {
         return prev
       }
 
+      // Calcula preço final com desconto do produto
+      const precoFinal = produto.desconto > 0
+        ? produto.preco * (1 - produto.desconto / 100)
+        : produto.preco
+
       if (existente) {
         return prev.map((item) =>
           item.id === produto.id ? { ...item, quantidade: item.quantidade + 1 } : item
         )
       }
 
-      return [...prev, { id: produto.id, nome: produto.nome, preco: Number(produto.preco), quantidade: 1 }]
+      return [
+        ...prev,
+        {
+          id: produto.id,
+          nome: produto.nome,
+          preco: Number(produto.preco),
+          precoFinal,
+          quantidade: 1,
+          descontoProduto: produto.desconto,
+        },
+      ]
     })
   }, [])
 
@@ -154,9 +171,13 @@ export default function PaginaPDVClient() {
 
   const limparCarrinho = useCallback(() => setCarrinho([]), [])
 
-  // ─── finalizarVenda agora recebe também o núcleo ──────────────────────────
   const finalizarVenda = useCallback(
-    async (formaPagamentoUI: FormaPagamentoUI, buyerName: string, nucleo: string) => {
+    async (
+      formaPagamentoUI: FormaPagamentoUI,
+      buyerName: string,
+      nucleo: string,
+      descontoVenda: number // percentual 0–100
+    ) => {
       if (carrinho.length === 0) return
       setCheckoutCarregando(true)
 
@@ -164,9 +185,15 @@ export default function PaginaPDVClient() {
         const payload = {
           payment: mapFormaPagamento(formaPagamentoUI),
           buyerName: buyerName?.trim() ? buyerName.trim() : null,
-          // Envia nucleo ao backend; use "nao_informado" como fallback
           nucleo: nucleo && nucleo !== "nao_informado" ? nucleo : null,
-          items: carrinho.map((i) => ({ productId: i.id, qty: i.quantidade })),
+          // Desconto de venda em percentual (inteiro 0–100)
+          descontoVendaPct: descontoVenda > 0 ? descontoVenda : null,
+          items: carrinho.map((i) => ({
+            productId: i.id,
+            qty: i.quantidade,
+            // Envia o preço final (já com desconto de produto) para o backend calcular corretamente
+            unitCents: Math.round(i.precoFinal * 100),
+          })),
         }
 
         const res = await fetch("/api/sales", {
@@ -209,7 +236,7 @@ export default function PaginaPDVClient() {
     [carrinho, mutate, productNames]
   )
 
-  const totalCarrinho = carrinho.reduce((s, i) => s + i.preco * i.quantidade, 0)
+  const totalCarrinho = carrinho.reduce((s, i) => s + i.precoFinal * i.quantidade, 0)
   const totalItens = carrinho.reduce((s, i) => s + i.quantidade, 0)
 
   return (

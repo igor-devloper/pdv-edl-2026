@@ -1,145 +1,149 @@
 import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import prisma from "@/lib/prisma"
-import { Prisma } from "@/lib/generated/prisma/client"
+import { getCargoUsuario } from "@/lib/auth-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-type Payment = "PIX" | "CASH" | "CARD"
-type SaleItemInput = { productId: number; qty: number }
-type SaleCreateBody = {
-  payment: Payment
-  buyerName?: string | null
-  nucleo?: string | null
-  items: SaleItemInput[]
-}
-
-type ProdutoRow = { id: number; priceCents: number; stockOnHand: number }
-
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null
-}
-function parseIntStrict(v: unknown, field: string): number {
-  const n = typeof v === "number" ? v : Number(v)
-  if (!Number.isFinite(n) || !Number.isInteger(n)) throw new Error(`${field} inválido`)
+function mustInt(v: any, name: string) {
+  const n = Number(v)
+  if (!Number.isFinite(n) || !Number.isInteger(n)) throw new Error(`${name} inválido`)
   return n
 }
-function parsePayment(v: unknown): Payment {
-  const s = String(v ?? "").toUpperCase()
-  if (s === "PIX" || s === "CASH" || s === "CARD") return s
-  throw new Error("payment inválido (use PIX | CASH | CARD)")
-}
-function parseBody(raw: unknown): SaleCreateBody {
-  if (!isRecord(raw)) throw new Error("payload inválido")
 
-  const payment = parsePayment(raw.payment)
-
-  const buyerName =
-    raw.buyerName == null ? null : String(raw.buyerName).trim() || null
-
-  // nucleo: string opcional, limpo e truncado em 100 chars
-  const nucleo =
-    raw.nucleo == null ? null : String(raw.nucleo).trim().slice(0, 100) || null
-
-  if (!Array.isArray(raw.items) || raw.items.length === 0)
-    throw new Error("items é obrigatório")
-
-  const items: SaleItemInput[] = raw.items.map((it, idx) => {
-    if (!isRecord(it)) throw new Error(`items[${idx}] inválido`)
-    const productId = parseIntStrict(it.productId, `items[${idx}].productId`)
-    const qty = parseIntStrict(it.qty, `items[${idx}].qty`)
-    if (qty <= 0) throw new Error(`items[${idx}].qty deve ser > 0`)
-    return { productId, qty }
+// Gera código único da venda, ex: EDL-000123
+async function gerarCodigo(): Promise<string> {
+  const last = await prisma.sale.findFirst({
+    orderBy: { id: "desc" },
+    select: { id: true },
   })
-
-  return { payment, buyerName, nucleo, items }
-}
-
-function genCode(): string {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, "0")
-  const day = String(d.getDate()).padStart(2, "0")
-  const rand = Math.random().toString(36).slice(2, 7).toUpperCase()
-  return `EDL-${y}${m}${day}-${rand}`
+  const next = (last?.id ?? 0) + 1
+  return `EDL-${String(next).padStart(6, "0")}`
 }
 
 export async function POST(req: Request) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: "não autenticado" }, { status: 401 })
 
-  let body: SaleCreateBody
+  // Qualquer usuário autenticado pode registrar venda
+  await getCargoUsuario()
+
+  let body: any
   try {
-    body = parseBody((await req.json()) as unknown)
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "payload inválido"
-    return NextResponse.json({ error: msg }, { status: 400 })
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 })
   }
 
+  const { payment, buyerName, nucleo, items, descontoVendaPct } = body
+
+  if (!["PIX", "CASH", "CARD"].includes(payment)) {
+    return NextResponse.json({ error: "payment inválido" }, { status: 400 })
+  }
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return NextResponse.json({ error: "items obrigatório" }, { status: 400 })
+  }
+
+  // descontoVendaPct: percentual inteiro 0–100 (opcional)
+  const descontoPct = descontoVendaPct != null
+    ? Math.min(100, Math.max(0, Number(descontoVendaPct) || 0))
+    : 0
+
   try {
-    const sale = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const productIds = body.items.map((i) => i.productId)
+    const sale = await prisma.$transaction(async (tx) => {
+      // 1. Verifica estoque e calcula valores para cada item
+      const saleItems: Array<{
+        productId: number
+        qty: number
+        unitCents: number
+        totalCents: number
+      }> = []
 
-      const produtos: ProdutoRow[] = await tx.product.findMany({
-        where: { id: { in: productIds }, active: true },
-        select: { id: true, priceCents: true, stockOnHand: true },
-      })
+      for (const item of items) {
+        const productId = mustInt(item.productId, "productId")
+        const qty = mustInt(item.qty, "qty")
+        if (qty <= 0) throw new Error(`qty inválido para produto ${productId}`)
 
-      const byId = new Map<number, ProdutoRow>(produtos.map((p) => [p.id, p]))
+        const produto = await tx.product.findUnique({
+          where: { id: productId },
+          select: { id: true, priceCents: true, desconto: true, stockOnHand: true, active: true },
+        })
 
-      for (const it of body.items) {
-        const p = byId.get(it.productId)
-        if (!p) throw new Error(`PRODUTO_NAO_ENCONTRADO:${it.productId}`)
-        if (p.stockOnHand < it.qty) throw new Error(`ESTOQUE_INSUFICIENTE:${p.id}`)
+        if (!produto || !produto.active) throw new Error(`produto ${productId} não encontrado`)
+        if (produto.stockOnHand < qty) throw new Error(`estoque insuficiente para produto ${productId}`)
+
+        // Se o frontend enviou unitCents (preço já com desconto de produto), usa esse valor.
+        // Senão, recalcula a partir do priceCents + desconto do produto.
+        let unitCents: number
+        if (item.unitCents != null) {
+          unitCents = mustInt(item.unitCents, "unitCents")
+        } else {
+          const descontoProdutoPct = produto.desconto ?? 0
+          unitCents = descontoProdutoPct > 0
+            ? Math.round(produto.priceCents * (1 - descontoProdutoPct / 100))
+            : produto.priceCents
+        }
+
+        saleItems.push({
+          productId,
+          qty,
+          unitCents,
+          totalCents: unitCents * qty,
+        })
       }
 
-      const totalCents = body.items.reduce((acc, it) => {
-        const p = byId.get(it.productId)!
-        return acc + p.priceCents * it.qty
-      }, 0)
+      // 2. Calcula subtotal dos itens
+      const subtotalCents = saleItems.reduce((s, i) => s + i.totalCents, 0)
 
-      const created = await tx.sale.create({
+      // 3. Aplica desconto de venda
+      const descontoVendaCents = descontoPct > 0
+        ? Math.round(subtotalCents * (descontoPct / 100))
+        : 0
+      const totalCents = Math.max(0, subtotalCents - descontoVendaCents)
+
+      // 4. Cria a venda
+      const code = await gerarCodigo()
+
+      const novaSale = await tx.sale.create({
         data: {
-          code: genCode(),
+          code,
           sellerUserId: userId,
-          payment: body.payment,
+          payment,
+          nomeComprador: buyerName || null,
+          nucleo: nucleo || null,
           totalCents,
-          nomeComprador: body.buyerName ?? null,
-          nucleo: body.nucleo ?? null,          // ← campo novo
+          // Armazena o desconto de venda no registro para relatórios
+          // (garanta que o campo existe no schema — veja abaixo)
+          ...(descontoPct > 0 ? { descontoVendaPct: descontoPct } : {}),
           items: {
-            create: body.items.map((it) => {
-              const p = byId.get(it.productId)!
-              return {
-                productId: p.id,
-                qty: it.qty,
-                unitCents: p.priceCents,
-                totalCents: p.priceCents * it.qty,
-              }
-            }),
+            create: saleItems,
           },
         },
         include: { items: true },
       })
 
-      for (const it of body.items) {
+      // 5. Baixa estoque e registra movimentos
+      for (const item of saleItems) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stockOnHand: { decrement: item.qty } },
+        })
+
         await tx.stockMovement.create({
           data: {
-            productId: it.productId,
+            productId: item.productId,
             type: "OUT",
-            qty: -Math.abs(it.qty),
+            qty: -item.qty,
+            note: `Venda ${code}`,
             actorUserId: userId,
-            note: `Venda ${created.code}`,
           },
-        })
-        await tx.product.update({
-          where: { id: it.productId },
-          data: { stockOnHand: { decrement: it.qty } },
         })
       }
 
-      return created
+      return novaSale
     })
 
     return NextResponse.json({
@@ -149,22 +153,34 @@ export async function POST(req: Request) {
         code: sale.code,
         payment: sale.payment,
         totalCents: sale.totalCents,
-        nucleo: sale.nucleo,
         createdAt: sale.createdAt,
-        items: sale.items.map((it) => ({
-          productId: it.productId,
-          qty: it.qty,
-          unitCents: it.unitCents,
-          totalCents: it.totalCents,
+        items: sale.items.map((i) => ({
+          productId: i.productId,
+          qty: i.qty,
+          unitCents: i.unitCents,
+          totalCents: i.totalCents,
         })),
       },
     })
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : "erro interno"
-    if (msg.startsWith("PRODUTO_NAO_ENCONTRADO:"))
-      return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })
-    if (msg.startsWith("ESTOQUE_INSUFICIENTE:"))
-      return NextResponse.json({ error: "Estoque insuficiente" }, { status: 409 })
-    return NextResponse.json({ error: msg }, { status: 500 })
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || "Erro ao processar venda" }, { status: 400 })
   }
+}
+
+export async function GET(req: Request) {
+  const { userId } = await auth()
+  if (!userId) return NextResponse.json({ error: "não autenticado" }, { status: 401 })
+
+  const { searchParams } = new URL(req.url)
+  const take = Math.min(100, parseInt(searchParams.get("limit") ?? "20"))
+  const skip = parseInt(searchParams.get("offset") ?? "0")
+
+  const sales = await prisma.sale.findMany({
+    orderBy: { createdAt: "desc" },
+    take,
+    skip,
+    include: { items: true },
+  })
+
+  return NextResponse.json({ sales })
 }

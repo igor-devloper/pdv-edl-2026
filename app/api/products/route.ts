@@ -15,6 +15,7 @@ type ProdutoAPI = {
   stock: number
   image_url: string | null
   category: string | null
+  discount: number // percentual 0–100
 }
 
 function asInt(v: any, name: string) {
@@ -36,7 +37,8 @@ export async function GET() {
       name: true,
       priceCents: true,
       stockOnHand: true,
-      imageUrl: true, // ✅ ADICIONADO
+      imageUrl: true,
+      desconto: true, // percentual 0–100
     },
   })
 
@@ -45,9 +47,10 @@ export async function GET() {
     name: p.name,
     description: null,
     category: null,
-    image_url: p.imageUrl, // ✅ MAPEADO
+    image_url: p.imageUrl,
     price: Number((p.priceCents ?? 0) / 100),
     stock: Number(p.stockOnHand ?? 0),
+    discount: Number(p.desconto ?? 0),
   }))
 
   return NextResponse.json(data)
@@ -64,11 +67,12 @@ export async function POST(req: Request) {
 
     const sku = str(body.sku)
     const name = str(body.name)
-    const imageUrl = body.imageUrl || null // ✅ ADICIONADO
+    const imageUrl = body.imageUrl || null
     const priceCents = asInt(body.priceCents, "priceCents")
     const costCents = body.costCents == null ? null : asInt(body.costCents, "costCents")
     const active = body.active == null ? true : Boolean(body.active)
     const stockOnHand = body.stockOnHand == null ? 0 : asInt(body.stockOnHand, "stockOnHand")
+    const desconto = body.desconto == null ? 0 : Math.min(100, Math.max(0, asInt(body.desconto, "desconto")))
 
     if (!sku) throw new Error("sku obrigatório")
     if (!name) throw new Error("name obrigatório")
@@ -76,15 +80,7 @@ export async function POST(req: Request) {
     if (stockOnHand < 0) throw new Error("stockOnHand inválido")
 
     const created = await prisma.product.create({
-      data: { 
-        sku, 
-        name, 
-        imageUrl, // ✅ ADICIONADO
-        priceCents, 
-        costCents, 
-        active, 
-        stockOnHand 
-      },
+      data: { sku, name, imageUrl, priceCents, costCents, active, stockOnHand, desconto },
     })
 
     return NextResponse.json({ ok: true, produto: created })

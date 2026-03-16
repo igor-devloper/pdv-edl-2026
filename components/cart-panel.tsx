@@ -4,6 +4,7 @@ import * as React from "react"
 import {
   ShoppingCart, Trash2, QrCode, Banknote, CreditCard,
   User, Building2, X, CheckCircle2, Copy, ArrowLeftRight,
+  Tag, Percent,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -11,7 +12,6 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
-// ⚠️  Se ainda não instalou: npm install qrcode.react
 import { QRCodeSVG } from "qrcode.react"
 
 export type FormaPagamentoUI = "pix" | "dinheiro" | "cartao"
@@ -19,17 +19,19 @@ export type FormaPagamentoUI = "pix" | "dinheiro" | "cartao"
 export type ItemCarrinho = {
   id: number
   nome: string
-  preco: number
+  preco: number        // preço original
+  precoFinal: number   // preço já com desconto de produto aplicado
   quantidade: number
+  descontoProduto: number // % de desconto do produto (0–100)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ✏️  CONFIGURAÇÃO PIX — edite apenas este bloco
+// ✏️  CONFIGURAÇÃO PIX
 // ─────────────────────────────────────────────────────────────────────────────
 const PIX_CONFIG = {
   chave: "wagnerigor9@gmail.com",
   nomeRecebedor: "Igor Wagner Gomes da Silva",
-  cidade: "Joao Pessoa",   // sem acento — o gerador normaliza, mas já deixar limpo evita qualquer edge case
+  cidade: "Joao Pessoa",
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -63,10 +65,8 @@ function calculateCRC16(str: string): string {
 
 function buildPixPayload(valor: number): string {
   const { chave, nomeRecebedor, cidade } = PIX_CONFIG
-
   const formattedAmount = valor.toFixed(2)
 
-  // Remove acentos, caracteres especiais — máx 25 chars, maiúsculo
   const cleanName = nomeRecebedor
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -75,7 +75,6 @@ function buildPixPayload(valor: number): string {
     .trim()
     .toUpperCase()
 
-  // Cidade também limpa — máx 15 chars, maiúsculo
   const cleanCity = cidade
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -84,7 +83,6 @@ function buildPixPayload(valor: number): string {
     .trim()
     .toUpperCase()
 
-  // Merchant Account Info (campo 26) — domínio DEVE ser minúsculo
   const pixDomain = "br.gov.bcb.pix"
   const merchantAccInfo = [
     "00", padN(pixDomain.length), pixDomain,
@@ -92,7 +90,6 @@ function buildPixPayload(valor: number): string {
   ].join("")
   const merchantField = `26${padN(merchantAccInfo.length)}${merchantAccInfo}`
 
-  // Additional Data Field (campo 62) — txid fixo "***"
   const txid = "***"
   const txidField = `62${padN(txid.length + 4)}0503${txid}`
 
@@ -147,7 +144,6 @@ function PixQrModal({
         </div>
 
         <div className="flex flex-col items-center gap-4 p-5">
-          {/* Valor */}
           <div className="w-full rounded-2xl bg-gradient-to-br from-red-50 to-pink-50 border border-red-100 p-3 text-center">
             <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Valor a pagar</p>
             <p className="text-3xl font-black text-red-600 mt-0.5 tabular-nums">
@@ -156,17 +152,10 @@ function PixQrModal({
             <p className="text-[11px] text-gray-400 mt-0.5">{PIX_CONFIG.nomeRecebedor}</p>
           </div>
 
-          {/* QR Code — renderizado localmente, sem dependência de URL externa */}
           <div className="rounded-2xl border-2 border-red-100 bg-white p-3 shadow-lg">
-            <QRCodeSVG
-              value={pixPayload}
-              size={200}
-              level="H"
-              includeMargin={false}
-            />
+            <QRCodeSVG value={pixPayload} size={200} level="H" includeMargin={false} />
           </div>
 
-          {/* Copia e cola */}
           <button
             type="button"
             onClick={copiar}
@@ -180,7 +169,6 @@ function PixQrModal({
             {copied ? "Copiado ✓" : "Copiar código Copia e Cola"}
           </button>
 
-          {/* Botões */}
           <div className="flex w-full gap-2">
             <Button
               variant="outline"
@@ -244,7 +232,6 @@ function TrocoModal({
         </div>
 
         <div className="flex flex-col gap-4 p-5">
-          {/* Total */}
           <div className="rounded-2xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-100 p-3 text-center">
             <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Total da compra</p>
             <p className="text-3xl font-black text-emerald-600 tabular-nums">
@@ -252,7 +239,6 @@ function TrocoModal({
             </p>
           </div>
 
-          {/* Input valor recebido */}
           <div>
             <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-gray-500">
               Quanto o cliente entregou?
@@ -273,7 +259,6 @@ function TrocoModal({
               />
             </div>
 
-            {/* Sugestão de cédulas */}
             {sugestoes.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {sugestoes.map((c) => (
@@ -294,7 +279,6 @@ function TrocoModal({
             )}
           </div>
 
-          {/* Troco */}
           <div className={`rounded-2xl border-2 p-4 text-center transition-all ${
             trocoValido
               ? "border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50"
@@ -320,7 +304,6 @@ function TrocoModal({
             )}
           </div>
 
-          {/* Botões */}
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -352,7 +335,12 @@ type Props = {
   itens: ItemCarrinho[]
   onRemoverItem: (id: number) => void
   onLimpar: () => void
-  onFinalizar: (forma: FormaPagamentoUI, buyerName: string, nucleo: string) => void
+  onFinalizar: (
+    forma: FormaPagamentoUI,
+    buyerName: string,
+    nucleo: string,
+    descontoVenda: number // percentual 0–100
+  ) => void
   carregando: boolean
 }
 
@@ -362,15 +350,37 @@ const paymentMethods: Array<{ value: FormaPagamentoUI; label: string; icon: Reac
   { value: "cartao",   label: "Cartão",   icon: CreditCard },
 ]
 
+// Atalhos rápidos de desconto de venda
+const DESCONTO_ATALHOS = [5, 10, 15, 20]
+
 // ─── Componente Principal ─────────────────────────────────────────────────────
 export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carregando }: Props) {
   const [selectedPayment, setSelectedPayment] = React.useState<FormaPagamentoUI>("pix")
   const [buyerName, setBuyerName]             = React.useState("")
   const [nucleo, setNucleo]                   = React.useState<string>("")
+  const [descontoVendaStr, setDescontoVendaStr] = React.useState("")
   const [pixModalOpen, setPixModalOpen]       = React.useState(false)
   const [trocoModalOpen, setTrocoModalOpen]   = React.useState(false)
 
-  const total      = itens.reduce((s, i) => s + i.preco * i.quantidade, 0)
+  // Subtotal com descontos de produto já aplicados
+  const subtotal = itens.reduce((s, i) => s + i.precoFinal * i.quantidade, 0)
+
+  // Desconto da venda (percentual digitado ou 0)
+  const descontoVendaPct = Math.min(100, Math.max(0, parseFloat(descontoVendaStr) || 0))
+  const valorDescontoVenda = subtotal * (descontoVendaPct / 100)
+  const total = Math.max(0, subtotal - valorDescontoVenda)
+
+  // Desconto total de produtos (diferença entre preço cheio e final)
+  const totalDescontoProdutos = itens.reduce(
+    (s, i) => s + (i.preco - i.precoFinal) * i.quantidade,
+    0
+  )
+  const temDescontoProdutos = totalDescontoProdutos > 0
+  const temDescontoVenda = descontoVendaPct > 0
+
+  const totalOriginal = itens.reduce((s, i) => s + i.preco * i.quantidade, 0)
+  const totalEconomia = totalOriginal - total
+
   const totalItems = itens.reduce((s, i) => s + i.quantidade, 0)
   const canFinish  = itens.length > 0 && !carregando
 
@@ -378,7 +388,11 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
     if (!canFinish) return
     if (selectedPayment === "pix")           setPixModalOpen(true)
     else if (selectedPayment === "dinheiro") setTrocoModalOpen(true)
-    else                                     onFinalizar("cartao", buyerName, nucleo)
+    else                                     onFinalizar("cartao", buyerName, nucleo, descontoVendaPct)
+  }
+
+  function handleDescontoAtalho(pct: number) {
+    setDescontoVendaStr(descontoVendaStr === String(pct) ? "" : String(pct))
   }
 
   return (
@@ -428,14 +442,29 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm sm:text-base font-semibold text-gray-900">{item.nome}</p>
-                    <p className="text-xs text-gray-600">
-                      {item.quantidade}x R$ {Number(item.preco).toFixed(2).replace(".", ",")}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-xs text-gray-600">
+                        {item.quantidade}x R$ {Number(item.precoFinal).toFixed(2).replace(".", ",")}
+                      </p>
+                      {item.descontoProduto > 0 && (
+                        <Badge className="rounded-full bg-amber-100 text-amber-700 hover:bg-amber-100 text-[9px] px-1.5 py-0 font-bold">
+                          <Tag className="h-2 w-2 mr-0.5" />
+                          -{item.descontoProduto}%
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <p className="whitespace-nowrap text-sm sm:text-base font-bold text-red-600">
-                      R$ {(item.preco * item.quantidade).toFixed(2).replace(".", ",")}
-                    </p>
+                    <div className="text-right">
+                      {item.descontoProduto > 0 && (
+                        <p className="text-[10px] text-gray-400 line-through leading-none">
+                          R$ {(item.preco * item.quantidade).toFixed(2).replace(".", ",")}
+                        </p>
+                      )}
+                      <p className="whitespace-nowrap text-sm sm:text-base font-bold text-red-600">
+                        R$ {(item.precoFinal * item.quantidade).toFixed(2).replace(".", ",")}
+                      </p>
+                    </div>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -495,6 +524,54 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
               </div>
             </div>
 
+            {/* ─── Desconto da venda ─────────────────────────────────── */}
+            <div>
+              <p className="mb-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-wide text-gray-500 flex items-center gap-1">
+                <Tag className="h-3 w-3" />
+                Desconto na venda
+              </p>
+
+              {/* Atalhos rápidos */}
+              <div className="mb-2 flex gap-1.5 flex-wrap">
+                {DESCONTO_ATALHOS.map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => handleDescontoAtalho(pct)}
+                    className={`rounded-full border-2 px-2.5 py-0.5 text-[10px] sm:text-xs font-bold transition-all ${
+                      descontoVendaStr === String(pct)
+                        ? "border-amber-500 bg-amber-50 text-amber-700"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-amber-300 hover:bg-amber-50"
+                    }`}
+                  >
+                    -{pct}%
+                  </button>
+                ))}
+              </div>
+
+              {/* Input manual */}
+              <div className="relative">
+                <Percent className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={descontoVendaStr}
+                  onChange={(e) => setDescontoVendaStr(e.target.value)}
+                  placeholder="0"
+                  className="rounded-full border-amber-100 pr-8 text-sm h-9 sm:h-10 focus-visible:ring-amber-400 tabular-nums"
+                />
+              </div>
+
+              {temDescontoVenda && (
+                <p className="mt-1 text-[10px] sm:text-xs text-amber-600 font-semibold">
+                  Economia de R$ {valorDescontoVenda.toFixed(2).replace(".", ",")} na venda
+                </p>
+              )}
+            </div>
+
             {/* Forma de pagamento */}
             <div>
               <p className="mb-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-wide text-gray-500">
@@ -519,12 +596,66 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
               </div>
             </div>
 
-            {/* Total */}
-            <div className="flex items-center justify-between rounded-2xl bg-gradient-to-br from-red-50 to-pink-50 p-3 sm:p-4">
-              <span className="text-sm sm:text-base font-semibold text-gray-700">Total</span>
-              <span className="text-xl sm:text-2xl font-bold text-red-600 tabular-nums">
-                R$ {total.toFixed(2).replace(".", ",")}
-              </span>
+            {/* Resumo de preços */}
+            <div className="rounded-2xl bg-gradient-to-br from-red-50 to-pink-50 p-3 sm:p-4 space-y-1.5">
+              {/* Subtotal */}
+              {(temDescontoProdutos || temDescontoVenda) && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Subtotal</span>
+                  <span className="text-sm font-semibold text-gray-700 tabular-nums">
+                    R$ {subtotal.toFixed(2).replace(".", ",")}
+                  </span>
+                </div>
+              )}
+
+              {/* Desconto produtos */}
+              {temDescontoProdutos && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-amber-600 flex items-center gap-1">
+                    <Tag className="h-3 w-3" />
+                    Desconto produtos
+                  </span>
+                  <span className="text-xs font-bold text-amber-600 tabular-nums">
+                    -R$ {totalDescontoProdutos.toFixed(2).replace(".", ",")}
+                  </span>
+                </div>
+              )}
+
+              {/* Desconto venda */}
+              {temDescontoVenda && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-amber-600 flex items-center gap-1">
+                    <Percent className="h-3 w-3" />
+                    Desconto venda ({descontoVendaPct}%)
+                  </span>
+                  <span className="text-xs font-bold text-amber-600 tabular-nums">
+                    -R$ {valorDescontoVenda.toFixed(2).replace(".", ",")}
+                  </span>
+                </div>
+              )}
+
+              {/* Separador quando há descontos */}
+              {(temDescontoProdutos || temDescontoVenda) && (
+                <div className="border-t border-red-100 pt-1.5" />
+              )}
+
+              {/* Total */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm sm:text-base font-semibold text-gray-700">Total</span>
+                <span className="text-xl sm:text-2xl font-bold text-red-600 tabular-nums">
+                  R$ {total.toFixed(2).replace(".", ",")}
+                </span>
+              </div>
+
+              {/* Economia total */}
+              {totalEconomia > 0.001 && (
+                <div className="flex items-center justify-center gap-1 rounded-xl bg-green-50 border border-green-100 px-3 py-1.5 mt-1">
+                  <Tag className="h-3 w-3 text-green-600" />
+                  <span className="text-[10px] sm:text-xs font-bold text-green-700">
+                    Você economizou R$ {totalEconomia.toFixed(2).replace(".", ",")}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Botão */}
@@ -550,14 +681,14 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
         open={pixModalOpen}
         onOpenChange={setPixModalOpen}
         total={total}
-        onConfirmar={() => { setPixModalOpen(false); onFinalizar("pix", buyerName, nucleo) }}
+        onConfirmar={() => { setPixModalOpen(false); onFinalizar("pix", buyerName, nucleo, descontoVendaPct) }}
         carregando={carregando}
       />
       <TrocoModal
         open={trocoModalOpen}
         onOpenChange={setTrocoModalOpen}
         total={total}
-        onConfirmar={() => { setTrocoModalOpen(false); onFinalizar("dinheiro", buyerName, nucleo) }}
+        onConfirmar={() => { setTrocoModalOpen(false); onFinalizar("dinheiro", buyerName, nucleo, descontoVendaPct) }}
         carregando={carregando}
       />
     </>

@@ -1,6 +1,6 @@
 "use client"
 
-import { Package, Plus, Minus } from "lucide-react"
+import { Package, Plus, Minus, Tag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 
@@ -12,6 +12,7 @@ export interface Produto {
   estoque: number
   imagemUrl: string | null
   categoria: string | null
+  desconto: number // percentual 0–100
 }
 
 interface ProductCardProps {
@@ -24,6 +25,10 @@ interface ProductCardProps {
 export function ProductCard({ produto, quantidade, onAdicionar, onRemover }: ProductCardProps) {
   const semEstoque = produto.estoque <= 0
   const limiteAtingido = quantidade >= produto.estoque
+  const temDesconto = produto.desconto > 0
+  const precoComDesconto = temDesconto
+    ? produto.preco * (1 - produto.desconto / 100)
+    : produto.preco
 
   return (
     <div className="group flex flex-col overflow-hidden rounded-2xl sm:rounded-3xl border border-red-100 bg-white shadow-md transition-all hover:shadow-xl">
@@ -46,6 +51,14 @@ export function ProductCard({ produto, quantidade, onAdicionar, onRemover }: Pro
           </Badge>
         )}
 
+        {/* Badge de desconto */}
+        {temDesconto && !semEstoque && (
+          <Badge className="absolute right-1.5 top-1.5 sm:right-2 sm:top-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-[10px] sm:text-xs font-bold text-white shadow-sm px-2 py-0.5 flex items-center gap-0.5">
+            <Tag className="h-2.5 w-2.5" />
+            -{produto.desconto}%
+          </Badge>
+        )}
+
         {semEstoque && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/90 backdrop-blur-sm">
             <span className="rounded-full bg-red-100 px-3 py-1 text-xs sm:text-sm font-bold text-red-600">
@@ -65,9 +78,20 @@ export function ProductCard({ produto, quantidade, onAdicionar, onRemover }: Pro
 
         <div className="mt-auto flex items-center justify-between pt-1 sm:pt-2">
           <div>
-            <p className="text-base sm:text-xl font-bold text-red-600">
-              R$ {Number(produto.preco).toFixed(2).replace(".", ",")}
-            </p>
+            {temDesconto ? (
+              <>
+                <p className="text-[10px] sm:text-xs text-gray-400 line-through leading-none">
+                  R$ {Number(produto.preco).toFixed(2).replace(".", ",")}
+                </p>
+                <p className="text-base sm:text-xl font-bold text-red-600">
+                  R$ {precoComDesconto.toFixed(2).replace(".", ",")}
+                </p>
+              </>
+            ) : (
+              <p className="text-base sm:text-xl font-bold text-red-600">
+                R$ {Number(produto.preco).toFixed(2).replace(".", ",")}
+              </p>
+            )}
             <p className="text-[10px] sm:text-xs text-gray-500">{produto.estoque} disponíveis</p>
           </div>
 

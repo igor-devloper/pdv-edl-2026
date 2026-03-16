@@ -10,9 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import { Plus, Pencil, Boxes, Package } from "lucide-react"
+import { Plus, Pencil, Boxes, Package, Tag, TrendingDown } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { ImageDropzone } from "@/components/image-dropzone"
+import { Badge } from "@/components/ui/badge"
 
 type Produto = {
   id: number
@@ -23,6 +24,7 @@ type Produto = {
   costCents: number | null
   active: boolean
   stockOnHand: number
+  desconto: number // percentual 0–100
 }
 
 type Resp = { produtos: Produto[] }
@@ -31,6 +33,10 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 function brlFromCents(cents: number) {
   return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`
+}
+
+function precoComDesconto(priceCents: number, desconto: number) {
+  return priceCents * (1 - desconto / 100)
 }
 
 export default function EstoquePage() {
@@ -47,10 +53,17 @@ export default function EstoquePage() {
   const [imageUrl, setImageUrl] = React.useState<string | null>(null)
   const [price, setPrice] = React.useState("0")
   const [cost, setCost] = React.useState("")
+  const [descontoStr, setDescontoStr] = React.useState("0")
   const [active, setActive] = React.useState(true)
 
   const [qty, setQty] = React.useState("0")
   const [note, setNote] = React.useState("")
+
+  // Preview do desconto no formulário
+  const descontoPct = Math.min(100, Math.max(0, parseFloat(descontoStr) || 0))
+  const previewPriceCents = Math.round(Number(price.replace(",", ".")) * 100) || 0
+  const previewFinalCents = descontoPct > 0 ? Math.round(previewPriceCents * (1 - descontoPct / 100)) : previewPriceCents
+  const temPreviewDesconto = descontoPct > 0 && previewPriceCents > 0
 
   const produtos = (data?.produtos || []).filter((p) => {
     const q = busca.trim().toLowerCase()
@@ -66,6 +79,7 @@ export default function EstoquePage() {
     setPrice("0")
     setQty("0")
     setCost("")
+    setDescontoStr("0")
     setActive(true)
     setEditOpen(true)
   }
@@ -77,6 +91,7 @@ export default function EstoquePage() {
     setImageUrl(p.imageUrl)
     setPrice(String((p.priceCents / 100).toFixed(2)))
     setCost(p.costCents == null ? "" : String((p.costCents / 100).toFixed(2)))
+    setDescontoStr(String(p.desconto ?? 0))
     setActive(p.active)
     setQty("0")
     setEditOpen(true)
@@ -96,6 +111,7 @@ export default function EstoquePage() {
       imageUrl: imageUrl || null,
       priceCents: Math.round(Number(price.replace(",", ".")) * 100),
       costCents: cost.trim() ? Math.round(Number(cost.replace(",", ".")) * 100) : null,
+      desconto: Math.min(100, Math.max(0, parseInt(descontoStr) || 0)),
       active,
       stockOnHand: qty,
     }
@@ -168,7 +184,10 @@ export default function EstoquePage() {
                 placeholder="Buscar..."
                 className="rounded-full border-red-100"
               />
-              <Button className="rounded-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600" onClick={abrirNovo}>
+              <Button
+                className="rounded-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600"
+                onClick={abrirNovo}
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 Produto
               </Button>
@@ -176,46 +195,126 @@ export default function EstoquePage() {
           </div>
 
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {produtos.map((p) => (
-              <Card key={p.id} className="rounded-2xl sm:rounded-3xl border-red-100 p-4 shadow-md">
-                <div className="space-y-3">
+            {produtos.map((p) => {
+              const temDesconto = (p.desconto ?? 0) > 0
+              const finalCents = temDesconto ? precoComDesconto(p.priceCents, p.desconto) : p.priceCents
+              const estoquebaixo = p.stockOnHand > 0 && p.stockOnHand <= 3
+
+              return (
+                <Card
+                  key={p.id}
+                  className={`rounded-2xl sm:rounded-3xl border p-0 shadow-md overflow-hidden transition-all hover:shadow-lg ${
+                    !p.active ? "opacity-60" : ""
+                  } ${temDesconto ? "border-amber-200" : "border-red-100"}`}
+                >
                   {/* Imagem */}
-                  <div className="relative flex h-32 items-center justify-center rounded-2xl bg-gradient-to-br from-red-50 to-pink-50 overflow-hidden">
+                  <div className="relative flex h-36 items-center justify-center bg-gradient-to-br from-red-50 to-pink-50 overflow-hidden">
                     {p.imageUrl ? (
                       <img src={p.imageUrl} alt={p.name} className="h-full w-full object-cover" />
                     ) : (
                       <Package className="h-12 w-12 text-red-200" />
                     )}
+
+                    {/* Badge de desconto */}
+                    {temDesconto && (
+                      <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+                        <span className="flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2.5 py-1 text-xs font-black text-white shadow-md">
+                          <Tag className="h-3 w-3" />
+                          -{p.desconto}%
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Badge inativo */}
+                    {!p.active && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm">
+                        <span className="rounded-full bg-gray-200 px-3 py-1 text-xs font-bold text-gray-500">
+                          Inativo
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Estoque baixo */}
+                    {estoquebaixo && p.active && (
+                      <div className="absolute bottom-2 left-2">
+                        <span className="rounded-full bg-red-100 border border-red-200 px-2 py-0.5 text-[10px] font-bold text-red-600">
+                          ⚠ Estoque baixo
+                        </span>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="space-y-2">
-                    <p className="truncate font-bold text-gray-900 text-sm sm:text-base">{p.name}</p>
-                    <p className="truncate text-xs text-gray-500">SKU: {p.sku}</p>
-                    <p className="text-sm">
-                      <span className="text-gray-600">Preço:</span>{" "}
-                      <b className="text-red-600">{brlFromCents(p.priceCents)}</b>
-                    </p>
-                    <p className="text-sm">
-                      <span className="text-gray-600">Estoque:</span> <b>{p.stockOnHand}</b>
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {p.active ? "✅ Ativo" : "❌ Inativo"}
-                    </p>
-                  </div>
+                  {/* Info */}
+                  <div className="p-4 space-y-2">
+                    <div>
+                      <p className="truncate font-bold text-gray-900 text-sm sm:text-base leading-tight">{p.name}</p>
+                      <p className="truncate text-[11px] text-gray-400 mt-0.5">SKU: {p.sku}</p>
+                    </div>
 
-                  <div className="flex gap-2 pt-2">
-                    <Button variant="outline" size="sm" className="flex-1 rounded-full border-red-200 hover:bg-red-50 text-xs sm:text-sm" onClick={() => abrirEditar(p)}>
-                      <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                      Editar
-                    </Button>
-                    <Button size="sm" className="flex-1 rounded-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-xs sm:text-sm" onClick={() => abrirAjuste(p)}>
-                      <Boxes className="mr-1.5 h-3.5 w-3.5" />
-                      Ajustar
-                    </Button>
+                    {/* Preços */}
+                    <div className="flex items-end gap-2">
+                      {temDesconto ? (
+                        <div>
+                          <p className="text-[11px] text-gray-400 line-through leading-none">
+                            {brlFromCents(p.priceCents)}
+                          </p>
+                          <p className="text-lg font-black text-red-600 leading-tight">
+                            {brlFromCents(finalCents)}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-lg font-black text-red-600">
+                          {brlFromCents(p.priceCents)}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Linha de dados */}
+                    <div className="flex items-center justify-between text-xs">
+                      <span className={`font-semibold ${p.stockOnHand === 0 ? "text-red-500" : estoquebaixo ? "text-amber-600" : "text-gray-600"}`}>
+                        {p.stockOnHand === 0 ? "🚫 Esgotado" : `📦 ${p.stockOnHand} un.`}
+                      </span>
+                      {p.costCents != null && (
+                        <span className="text-gray-400">
+                          Custo: {brlFromCents(p.costCents)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Economia visível */}
+                    {temDesconto && (
+                      <div className="flex items-center gap-1 rounded-xl bg-amber-50 border border-amber-100 px-2.5 py-1.5">
+                        <TrendingDown className="h-3 w-3 text-amber-600 shrink-0" />
+                        <span className="text-[10px] font-bold text-amber-700">
+                          Economia de {brlFromCents(p.priceCents - finalCents)} por unidade
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Ações */}
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1 rounded-full border-red-200 hover:bg-red-50 text-xs sm:text-sm"
+                        onClick={() => abrirEditar(p)}
+                      >
+                        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                        Editar
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="flex-1 rounded-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600 text-xs sm:text-sm"
+                        onClick={() => abrirAjuste(p)}
+                      >
+                        <Boxes className="mr-1.5 h-3.5 w-3.5" />
+                        Ajustar
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              )
+            })}
 
             {!produtos.length && (
               <Card className="rounded-2xl sm:rounded-3xl p-10 text-center text-gray-400 col-span-full">
@@ -233,7 +332,7 @@ export default function EstoquePage() {
             </DialogHeader>
 
             <div className="grid gap-4">
-              {/* ✅ DROPZONE */}
+              {/* Dropzone */}
               <div className="grid gap-2">
                 <Label>Imagem do Produto</Label>
                 <ImageDropzone value={imageUrl} onChange={setImageUrl} />
@@ -243,25 +342,109 @@ export default function EstoquePage() {
                 <Label>SKU</Label>
                 <Input value={sku} onChange={(e) => setSku(e.target.value)} className="rounded-full" />
               </div>
+
               <div className="grid gap-2">
                 <Label>Nome</Label>
                 <Input value={name} onChange={(e) => setName(e.target.value)} className="rounded-full" />
               </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-2">
                   <Label>Preço (R$)</Label>
-                  <Input value={price} onChange={(e) => setPrice(e.target.value)} className="rounded-full" />
+                  <Input
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    className="rounded-full"
+                    placeholder="0,00"
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label>Custo (R$)</Label>
-                  <Input value={cost} onChange={(e) => setCost(e.target.value)} className="rounded-full" />
+                  <Input
+                    value={cost}
+                    onChange={(e) => setCost(e.target.value)}
+                    className="rounded-full"
+                    placeholder="0,00"
+                  />
                 </div>
-                <div className="grid gap-2">
-                  <Label>Quantidade</Label>
-                  <Input value={qty} onChange={(e) => setQty(e.target.value)} className="rounded-full" />
-                </div>
+                {!produtoSel && (
+                  <div className="grid gap-2">
+                    <Label>Estoque inicial</Label>
+                    <Input
+                      value={qty}
+                      onChange={(e) => setQty(e.target.value)}
+                      className="rounded-full"
+                      placeholder="0"
+                    />
+                  </div>
+                )}
               </div>
 
+              {/* ─── Desconto do produto ─────────────────────────────── */}
+              <div className="grid gap-2">
+                <Label className="flex items-center gap-1.5">
+                  <Tag className="h-3.5 w-3.5 text-amber-500" />
+                  Desconto do produto (%)
+                </Label>
+
+                {/* Atalhos rápidos */}
+                <div className="flex flex-wrap gap-1.5">
+                  {[0, 5, 10, 15, 20, 25, 30, 50].map((pct) => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => setDescontoStr(String(pct))}
+                      className={`rounded-full border-2 px-3 py-1 text-xs font-bold transition-all ${
+                        descontoStr === String(pct)
+                          ? "border-amber-500 bg-amber-50 text-amber-700"
+                          : "border-gray-200 bg-white text-gray-500 hover:border-amber-300 hover:bg-amber-50"
+                      }`}
+                    >
+                      {pct === 0 ? "Sem desconto" : `-${pct}%`}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Input manual */}
+                <div className="relative">
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={1}
+                    value={descontoStr}
+                    onChange={(e) => setDescontoStr(e.target.value)}
+                    className="rounded-full border-amber-200 pr-10 focus-visible:ring-amber-400"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 select-none">
+                    %
+                  </span>
+                </div>
+
+                {/* Preview de preço com desconto */}
+                {temPreviewDesconto && (
+                  <div className="flex items-center justify-between rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 px-4 py-3">
+                    <div>
+                      <p className="text-[11px] text-gray-400 font-medium">Preço original</p>
+                      <p className="text-sm font-bold text-gray-500 line-through">
+                        {brlFromCents(previewPriceCents)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[11px] text-amber-600 font-medium">Com desconto</p>
+                      <p className="text-lg font-black text-amber-700">
+                        {brlFromCents(previewFinalCents)}
+                      </p>
+                    </div>
+                    <div className="rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-3 py-1.5 text-xs font-black text-white shadow">
+                      -{descontoPct}%
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Toggle ativo */}
               <div className="flex items-center justify-between rounded-2xl border border-red-100 p-3">
                 <div>
                   <p className="font-semibold text-sm">Ativo</p>
@@ -275,7 +458,10 @@ export default function EstoquePage() {
               <Button variant="outline" className="rounded-full" onClick={() => setEditOpen(false)}>
                 Cancelar
               </Button>
-              <Button className="rounded-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600" onClick={salvarProduto}>
+              <Button
+                className="rounded-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600"
+                onClick={salvarProduto}
+              >
                 Salvar
               </Button>
             </DialogFooter>
@@ -309,7 +495,10 @@ export default function EstoquePage() {
               <Button variant="outline" className="rounded-full" onClick={() => setEstoqueOpen(false)}>
                 Cancelar
               </Button>
-              <Button className="rounded-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600" onClick={ajustarEstoque}>
+              <Button
+                className="rounded-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600"
+                onClick={ajustarEstoque}
+              >
                 Aplicar
               </Button>
             </DialogFooter>

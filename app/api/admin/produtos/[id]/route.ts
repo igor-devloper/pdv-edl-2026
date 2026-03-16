@@ -36,11 +36,12 @@ export async function GET(_: Request, ctx: Ctx) {
       id: true,
       sku: true,
       name: true,
-      imageUrl: true, // ✅ ADICIONADO
+      imageUrl: true,
       priceCents: true,
       costCents: true,
       active: true,
       stockOnHand: true,
+      desconto: true, // percentual 0–100
     },
   })
 
@@ -66,12 +67,11 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 
   try {
-    // PATCH parcial
     const data: any = {}
 
     if (body.sku != null) data.sku = mustStr(body.sku, "sku")
     if (body.name != null) data.name = mustStr(body.name, "name")
-    if (body.imageUrl !== undefined) data.imageUrl = body.imageUrl || null // ✅ ADICIONADO
+    if (body.imageUrl !== undefined) data.imageUrl = body.imageUrl || null
 
     if (body.priceCents != null) {
       const n = mustInt(body.priceCents, "priceCents")
@@ -90,6 +90,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
 
     if (body.active != null) data.active = Boolean(body.active)
 
+    // Desconto do produto: percentual inteiro 0–100
+    if (body.desconto !== undefined) {
+      const n = body.desconto == null ? 0 : mustInt(body.desconto, "desconto")
+      if (n < 0 || n > 100) throw new Error("desconto deve ser entre 0 e 100")
+      data.desconto = n
+    }
+
     const updated = await prisma.product.update({
       where: { id: productId },
       data,
@@ -97,11 +104,12 @@ export async function PATCH(req: Request, ctx: Ctx) {
         id: true,
         sku: true,
         name: true,
-        imageUrl: true, // ✅ ADICIONADO
+        imageUrl: true,
         priceCents: true,
         costCents: true,
         active: true,
         stockOnHand: true,
+        desconto: true,
       },
     })
 
