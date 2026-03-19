@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils"
 import { UserButton, useUser } from "@clerk/nextjs"
-import { ShoppingBag, LayoutDashboard, Package, Users, AlertTriangle, Menu, Receipt, PieChart } from "lucide-react"
+import { ShoppingBag, LayoutDashboard, Package, Users, AlertTriangle, Menu, Receipt, PieChart, Layers, Gift } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { getCargoFromUser, isAdminCargo } from "@/lib/cargo-client"
@@ -38,7 +38,7 @@ export function Header() {
         <span>Vendas</span>
       </Link>
 
-      {/* Minhas Vendas — visível para TODOS os logados (com ou sem cargo) */}
+      {/* Minhas Vendas */}
       {logado && (
         <Link
           href="/minhas-vendas"
@@ -84,6 +84,21 @@ export function Header() {
           >
             <Package className="h-4 w-4" />
             <span>Estoque</span>
+          </Link>
+
+          {/* ── NOVO: Combos ── */}
+          <Link
+            href="/admin/combos"
+            onClick={() => setOpen(false)}
+            className={cn(
+              "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all",
+              pathname.startsWith("/admin/combos")
+                ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-md"
+                : "text-gray-600 hover:bg-red-50 hover:text-red-600"
+            )}
+          >
+            <Gift className="h-4 w-4" />
+            <span>Combos</span>
           </Link>
 
           <Link

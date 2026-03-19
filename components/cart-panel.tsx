@@ -4,7 +4,7 @@ import * as React from "react"
 import {
   ShoppingCart, Trash2, QrCode, Banknote, CreditCard,
   User, Building2, X, CheckCircle2, Copy, ArrowLeftRight,
-  Tag, CircleDollarSign,
+  Tag, CircleDollarSign, Gift,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -17,10 +17,14 @@ import { QRCodeSVG } from "qrcode.react"
 export type FormaPagamentoUI = "pix" | "dinheiro" | "cartao"
 
 export type ItemCarrinho = {
-  id: number
+  key: string          // chave única: "p:id" | "v:variantId" | "c:comboId:choicesHash"
+  id: number           // productId ou comboId
+  variantId: number | null
+  comboId: number | null
+  comboVariantChoices?: Record<number, number>  // comboItemId → variantId
   nome: string
   preco: number        // preço original
-  precoFinal: number   // preço já com desconto de produto aplicado
+  precoFinal: number   // preço com desconto de produto
   quantidade: number
   descontoProduto: number // % de desconto do produto (0–100)
 }
@@ -217,13 +221,13 @@ function TrocoModal({ open, onOpenChange, total, onConfirmar, carregando }: {
 // ─── Props ────────────────────────────────────────────────────────────────────
 type Props = {
   itens: ItemCarrinho[]
-  onRemoverItem: (id: number) => void
+  onRemoverItem: (key: string) => void   // ← agora recebe key string
   onLimpar: () => void
   onFinalizar: (
     forma: FormaPagamentoUI,
     buyerName: string,
     nucleo: string,
-    descontoVendaCents: number // valor fixo em centavos
+    descontoVendaCents: number
   ) => void
   carregando: boolean
 }
@@ -234,7 +238,6 @@ const paymentMethods: Array<{ value: FormaPagamentoUI; label: string; icon: Reac
   { value: "cartao",   label: "Cartão",   icon: CreditCard },
 ]
 
-// Atalhos rápidos de desconto em reais
 const DESCONTO_ATALHOS = [1, 2, 5, 10]
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
@@ -242,14 +245,11 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
   const [selectedPayment, setSelectedPayment] = React.useState<FormaPagamentoUI>("pix")
   const [buyerName, setBuyerName]             = React.useState("")
   const [nucleo, setNucleo]                   = React.useState<string>("")
-  const [descontoStr, setDescontoStr]         = React.useState("") // valor em R$
+  const [descontoStr, setDescontoStr]         = React.useState("")
   const [pixModalOpen, setPixModalOpen]       = React.useState(false)
   const [trocoModalOpen, setTrocoModalOpen]   = React.useState(false)
 
-  // Subtotal com descontos de produto já aplicados
   const subtotal = itens.reduce((s, i) => s + i.precoFinal * i.quantidade, 0)
-
-  // Desconto da venda em reais — limitado ao subtotal
   const descontoVenda = Math.min(subtotal, Math.max(0, parseFloat(descontoStr.replace(",", ".")) || 0))
   const total = Math.max(0, subtotal - descontoVenda)
   const descontoVendaCents = Math.round(descontoVenda * 100)
@@ -308,9 +308,14 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
           ) : (
             <div className="flex flex-col gap-2">
               {itens.map((item) => (
-                <div key={item.id} className="group flex items-center justify-between rounded-2xl bg-gradient-to-br from-red-50 to-pink-50 p-2.5 sm:p-3 transition-all hover:shadow-md">
+                <div key={item.key} className="group flex items-center justify-between rounded-2xl bg-gradient-to-br from-red-50 to-pink-50 p-2.5 sm:p-3 transition-all hover:shadow-md">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm sm:text-base font-semibold text-gray-900">{item.nome}</p>
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      {item.comboId && (
+                        <Gift className="h-3 w-3 text-red-500 flex-shrink-0" />
+                      )}
+                      <p className="truncate text-sm sm:text-base font-semibold text-gray-900">{item.nome}</p>
+                    </div>
                     <div className="flex items-center gap-1.5">
                       <p className="text-xs text-gray-600">
                         {item.quantidade}x R$ {Number(item.precoFinal).toFixed(2).replace(".", ",")}
@@ -333,7 +338,8 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
                         R$ {(item.precoFinal * item.quantidade).toFixed(2).replace(".", ",")}
                       </p>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 rounded-full opacity-0 transition-opacity hover:bg-red-100 hover:text-red-600 group-hover:opacity-100" onClick={() => onRemoverItem(item.id)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8 rounded-full opacity-0 transition-opacity hover:bg-red-100 hover:text-red-600 group-hover:opacity-100"
+                      onClick={() => onRemoverItem(item.key)}>
                       <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </Button>
                   </div>
@@ -373,14 +379,12 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
               </div>
             </div>
 
-            {/* ─── Desconto na venda (valor fixo R$) ───────────────── */}
+            {/* Desconto na venda */}
             <div>
               <p className="mb-1.5 text-[10px] sm:text-xs font-bold uppercase tracking-wide text-gray-500 flex items-center gap-1">
                 <CircleDollarSign className="h-3 w-3" />
                 Desconto na venda
               </p>
-
-              {/* Atalhos rápidos */}
               <div className="mb-2 flex gap-1.5 flex-wrap">
                 {DESCONTO_ATALHOS.map((val) => (
                   <button key={val} type="button" onClick={() => handleAtalho(val)}
@@ -394,12 +398,8 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
                   </button>
                 ))}
               </div>
-
-              {/* Input manual */}
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 select-none pointer-events-none">
-                  R$
-                </span>
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 select-none pointer-events-none">R$</span>
                 <Input
                   type="number" inputMode="decimal" min={0} step={0.01}
                   value={descontoStr}
@@ -408,8 +408,6 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
                   className="rounded-full border-amber-100 pl-9 text-sm h-9 sm:h-10 focus-visible:ring-amber-400 tabular-nums"
                 />
               </div>
-
-              {/* Aviso desconto alto */}
               {temDescontoVenda && descontoVenda > subtotal * 0.5 && (
                 <p className="mt-1 text-[10px] text-amber-600 font-semibold">
                   ⚠ Desconto alto — mais de 50% do subtotal
@@ -436,7 +434,7 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
               </div>
             </div>
 
-            {/* Resumo de preços */}
+            {/* Resumo */}
             <div className="rounded-2xl bg-gradient-to-br from-red-50 to-pink-50 p-3 sm:p-4 space-y-1.5">
               {(temDescontoProdutos || temDescontoVenda) && (
                 <div className="flex items-center justify-between">
@@ -446,7 +444,6 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
                   </span>
                 </div>
               )}
-
               {temDescontoProdutos && (
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-amber-600 flex items-center gap-1">
@@ -457,7 +454,6 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
                   </span>
                 </div>
               )}
-
               {temDescontoVenda && (
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-amber-600 flex items-center gap-1">
@@ -468,18 +464,13 @@ export function CartPanel({ itens, onRemoverItem, onLimpar, onFinalizar, carrega
                   </span>
                 </div>
               )}
-
-              {(temDescontoProdutos || temDescontoVenda) && (
-                <div className="border-t border-red-100 pt-1.5" />
-              )}
-
+              {(temDescontoProdutos || temDescontoVenda) && <div className="border-t border-red-100 pt-1.5" />}
               <div className="flex items-center justify-between">
                 <span className="text-sm sm:text-base font-semibold text-gray-700">Total</span>
                 <span className="text-xl sm:text-2xl font-bold text-red-600 tabular-nums">
                   R$ {total.toFixed(2).replace(".", ",")}
                 </span>
               </div>
-
               {totalEconomia > 0.001 && (
                 <div className="flex items-center justify-center gap-1 rounded-xl bg-green-50 border border-green-100 px-3 py-1.5 mt-1">
                   <Tag className="h-3 w-3 text-green-600" />

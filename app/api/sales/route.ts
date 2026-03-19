@@ -1,32 +1,37 @@
 import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import prisma from "@/lib/prisma"
-import { getCargoUsuario } from "@/lib/auth-server"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-function mustInt(v: any, name: string) {
-  const n = Number(v)
-  if (!Number.isFinite(n) || !Number.isInteger(n)) throw new Error(`${name} inválido`)
-  return n
+function padCode(n: number) {
+  return `EDL-${String(n).padStart(6, "0")}`
 }
 
-async function gerarCodigo(): Promise<string> {
-  const last = await prisma.sale.findFirst({
-    orderBy: { id: "desc" },
-    select: { id: true },
-  })
-  const next = (last?.id ?? 0) + 1
-  return `EDL-${String(next).padStart(6, "0")}`
-}
+/*
+  POST /api/sales
 
+  body.items: Array<{
+    // Item produto simples:
+    productId?: number
+    variantId?: number       — se produto tem variações
+
+    // Item combo:
+    comboId?: number
+    comboVariants?: Array<{   — escolhas de variação dentro do combo
+      comboItemId: number
+      variantId: number
+    }>
+
+    qty: number
+    unitCents: number
+  }>
+*/
 export async function POST(req: Request) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: "não autenticado" }, { status: 401 })
-
-  await getCargoUsuario()
 
   let body: any
   try {
@@ -35,143 +40,191 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 })
   }
 
-  const { payment, buyerName, nucleo, items, descontoVendaCents } = body
+  const items: any[] = Array.isArray(body.items) ? body.items : []
+  if (items.length === 0) return NextResponse.json({ error: "carrinho vazio" }, { status: 400 })
 
-  if (!["PIX", "CASH", "CARD"].includes(payment)) {
-    return NextResponse.json({ error: "payment inválido" }, { status: 400 })
-  }
-  if (!Array.isArray(items) || items.length === 0) {
-    return NextResponse.json({ error: "items obrigatório" }, { status: 400 })
-  }
+  const payment = ["PIX", "CASH", "CARD"].includes(body.payment) ? body.payment : null
+  if (!payment) return NextResponse.json({ error: "pagamento inválido" }, { status: 400 })
 
-  // Desconto de venda: valor fixo em centavos (>= 0)
-  const descontoCents = descontoVendaCents != null
-    ? Math.max(0, Math.round(Number(descontoVendaCents) || 0))
-    : 0
+  const buyerName = body.buyerName ? String(body.buyerName).trim() : null
+  const nucleo = body.nucleo ? String(body.nucleo).trim() : null
+  const descontoVendaCents = body.descontoVendaCents ? Number(body.descontoVendaCents) : null
 
   try {
-    const sale = await prisma.$transaction(async (tx) => {
-      // 1. Valida estoque e monta itens
-      const saleItems: Array<{
-        productId: number
-        qty: number
-        unitCents: number
-        totalCents: number
-      }> = []
+    const result = await prisma.$transaction(async (tx) => {
+      let totalCents = 0
+
+      const saleItemsData: any[] = []
 
       for (const item of items) {
-        const productId = mustInt(item.productId, "productId")
-        const qty = mustInt(item.qty, "qty")
-        if (qty <= 0) throw new Error(`qty inválido para produto ${productId}`)
+        const qty = Number(item.qty)
+        const unitCents = Number(item.unitCents)
+        const itemTotal = qty * unitCents
+        totalCents += itemTotal
 
-        const produto = await tx.product.findUnique({
-          where: { id: productId },
-          select: { id: true, priceCents: true, desconto: true, stockOnHand: true, active: true },
-        })
+        if (item.comboId) {
+          // === ITEM COMBO ===
+          const combo = await tx.combo.findUnique({
+            where: { id: Number(item.comboId) },
+            include: {
+              items: {
+                include: {
+                  product: { select: { id: true, hasVariants: true } },
+                  variant: true,
+                },
+              },
+            },
+          })
+          if (!combo) throw new Error(`Combo ${item.comboId} não encontrado`)
+          if (!combo.active) throw new Error(`Combo "${combo.name}" está inativo`)
 
-        if (!produto || !produto.active) throw new Error(`Produto ${productId} não encontrado`)
-        if (produto.stockOnHand < qty) throw new Error(`Estoque insuficiente para produto ${productId}`)
+          // Valida e baixa estoque de cada item do combo
+          const comboVariantChoices: Array<{ comboItemId: number; variantId: number; label: string }> = []
 
-        // Se o frontend enviou unitCents (preço já com desconto de produto), usa esse valor.
-        // Senão, recalcula a partir do priceCents + desconto do produto.
-        let unitCents: number
-        if (item.unitCents != null) {
-          unitCents = mustInt(item.unitCents, "unitCents")
+          for (const ci of combo.items) {
+            // Determina qual variante usar para este item do combo
+            let chosenVariantId: number | null = ci.variantId
+
+            if (!chosenVariantId && ci.product.hasVariants) {
+              // Variação livre: deve ter sido enviada em comboVariants
+              const chosenEntry = (item.comboVariants || []).find(
+                (cv: any) => Number(cv.comboItemId) === ci.id
+              )
+              if (!chosenEntry) throw new Error(`Escolha de variação faltando para "${ci.label || ci.product.id}" no combo "${combo.name}"`)
+              chosenVariantId = Number(chosenEntry.variantId)
+            }
+
+            if (chosenVariantId) {
+              const variant = await tx.productVariant.findUnique({ where: { id: chosenVariantId } })
+              if (!variant) throw new Error(`Variante ${chosenVariantId} não encontrada`)
+              if (variant.stockOnHand < ci.qty * qty) {
+                throw new Error(`Estoque insuficiente: ${variant.label} (disponível: ${variant.stockOnHand})`)
+              }
+
+              // Baixa estoque da variante
+              await tx.productVariant.update({
+                where: { id: chosenVariantId },
+                data: { stockOnHand: { decrement: ci.qty * qty } },
+              })
+
+              comboVariantChoices.push({ comboItemId: ci.id, variantId: chosenVariantId, label: variant.label })
+            } else {
+              // Produto sem variação no combo — baixa estoque do produto pai
+              const prod = await tx.product.findUnique({ where: { id: ci.productId } })
+              if (!prod) throw new Error(`Produto ${ci.productId} não encontrado`)
+              if (prod.stockOnHand < ci.qty * qty) {
+                throw new Error(`Estoque insuficiente: ${prod.name}`)
+              }
+              await tx.product.update({
+                where: { id: ci.productId },
+                data: { stockOnHand: { decrement: ci.qty * qty } },
+              })
+            }
+          }
+
+          saleItemsData.push({
+            comboId: combo.id,
+            qty,
+            unitCents,
+            totalCents: itemTotal,
+            comboVariantSnapshot: comboVariantChoices.length > 0 ? JSON.stringify(comboVariantChoices) : null,
+          })
+        } else if (item.variantId) {
+          // === ITEM COM VARIANTE ===
+          const variant = await tx.productVariant.findUnique({
+            where: { id: Number(item.variantId) },
+            include: { product: true },
+          })
+          if (!variant) throw new Error(`Variante ${item.variantId} não encontrada`)
+          if (variant.stockOnHand < qty) {
+            throw new Error(`Estoque insuficiente: ${variant.label} (disponível: ${variant.stockOnHand})`)
+          }
+
+          await tx.productVariant.update({
+            where: { id: variant.id },
+            data: { stockOnHand: { decrement: qty } },
+          })
+
+          saleItemsData.push({
+            productId: variant.productId,
+            variantId: variant.id,
+            qty,
+            unitCents,
+            totalCents: itemTotal,
+          })
         } else {
-          const descontoProdutoPct = produto.desconto ?? 0
-          unitCents = descontoProdutoPct > 0
-            ? Math.round(produto.priceCents * (1 - descontoProdutoPct / 100))
-            : produto.priceCents
-        }
+          // === ITEM PRODUTO SIMPLES ===
+          const productId = Number(item.productId)
+          const produto = await tx.product.findUnique({ where: { id: productId } })
+          if (!produto) throw new Error(`Produto ${productId} não encontrado`)
+          if (produto.stockOnHand < qty) {
+            throw new Error(`Estoque insuficiente: ${produto.name} (disponível: ${produto.stockOnHand})`)
+          }
 
-        saleItems.push({
-          productId,
-          qty,
-          unitCents,
-          totalCents: unitCents * qty,
-        })
+          await tx.product.update({
+            where: { id: productId },
+            data: { stockOnHand: { decrement: qty } },
+          })
+
+          saleItemsData.push({
+            productId,
+            qty,
+            unitCents,
+            totalCents: itemTotal,
+          })
+        }
       }
 
-      // 2. Subtotal dos itens
-      const subtotalCents = saleItems.reduce((s, i) => s + i.totalCents, 0)
+      // Aplica desconto da venda
+      const totalFinal = descontoVendaCents
+        ? Math.max(0, totalCents - descontoVendaCents)
+        : totalCents
 
-      // 3. Aplica desconto de venda (valor fixo) — não pode ultrapassar o subtotal
-      const descontoAplicado = Math.min(descontoCents, subtotalCents)
-      const totalCents = Math.max(0, subtotalCents - descontoAplicado)
+      // Gera código único
+      const count = await tx.sale.count()
+      const code = padCode(count + 1)
 
-      // 4. Cria venda
-      const code = await gerarCodigo()
-
-      const novaSale = await tx.sale.create({
+      const sale = await tx.sale.create({
         data: {
           code,
           sellerUserId: userId,
           payment,
-          nomeComprador: buyerName || null,
-          nucleo: nucleo || null,
-          totalCents,
-          // Armazena desconto de venda em centavos para relatórios
-          ...(descontoAplicado > 0 ? { descontoVendaCents: descontoAplicado } : {}),
-          items: { create: saleItems },
+          totalCents: totalFinal,
+          nomeComprador: buyerName,
+          nucleo,
+          descontoVendaCents,
+          items: {
+            create: saleItemsData,
+          },
         },
-        include: { items: true },
+        include: {
+          items: true,
+        },
       })
 
-      // 5. Baixa estoque e registra movimentos
-      for (const item of saleItems) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stockOnHand: { decrement: item.qty } },
-        })
-        await tx.stockMovement.create({
-          data: {
-            productId: item.productId,
-            type: "OUT",
-            qty: -item.qty,
-            note: `Venda ${code}`,
-            actorUserId: userId,
-          },
-        })
-      }
-
-      return novaSale
+      return sale
     })
 
     return NextResponse.json({
       ok: true,
       sale: {
-        id: sale.id,
-        code: sale.code,
-        payment: sale.payment,
-        totalCents: sale.totalCents,
-        createdAt: sale.createdAt,
-        items: sale.items.map((i) => ({
-          productId: i.productId,
-          qty: i.qty,
-          unitCents: i.unitCents,
-          totalCents: i.totalCents,
+        id: result.id,
+        code: result.code,
+        payment: result.payment,
+        totalCents: result.totalCents,
+        createdAt: result.createdAt,
+        items: result.items.map((it) => ({
+          productId: it.productId,
+          variantId: it.variantId,
+          comboId: it.comboId,
+          qty: it.qty,
+          unitCents: it.unitCents,
+          totalCents: it.totalCents,
         })),
       },
     })
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Erro ao processar venda" }, { status: 400 })
+  } catch (error: any) {
+    console.error("[sales POST]", error)
+    return NextResponse.json({ error: error?.message || "Erro ao processar venda" }, { status: 400 })
   }
-}
-
-export async function GET(req: Request) {
-  const { userId } = await auth()
-  if (!userId) return NextResponse.json({ error: "não autenticado" }, { status: 401 })
-
-  const { searchParams } = new URL(req.url)
-  const take = Math.min(100, parseInt(searchParams.get("limit") ?? "20"))
-  const skip = parseInt(searchParams.get("offset") ?? "0")
-
-  const sales = await prisma.sale.findMany({
-    orderBy: { createdAt: "desc" },
-    take,
-    skip,
-    include: { items: true },
-  })
-
-  return NextResponse.json({ sales })
 }

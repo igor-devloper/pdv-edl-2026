@@ -17,24 +17,103 @@ model Product {
   id       Int     @id @default(autoincrement())
   sku      String  @unique
   name     String
-  imageUrl String? // ✅ NOVO: URL da imagem do produto
+  imageUrl String?
 
   priceCents  Int
-  costCents   Int? // opcional
+  costCents   Int?
   active      Boolean  @default(true)
   desconto    Int?
-  stockOnHand Int      @default(0) // estoque atual (derivado/atualizado via movimentos)
+  stockOnHand Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  // Produto tem variações? (ex: tamanho, cor)
+  hasVariants Boolean @default(false)
+
+  saleItems  SaleItem[]
+  movements  StockMovement[]
+  variants   ProductVariant[]
+  comboItems ComboItem[]
+}
+
+// Variação individual de um produto (ex: Camisa Vermelha GG, Camisa Bege M)
+model ProductVariant {
+  id        Int     @id @default(autoincrement())
+  productId Int
+  sku       String  @unique // ex: CAMISA-VM-GG
+  label     String  // exibição humana: ex: "Vermelho / GG"
+  
+  // Atributos de variação
+  color     String? // ex: "Vermelho", "Bege"
+  size      String? // ex: "P", "M", "G", "GG", "XGG"
+
+  priceCents  Int?    // sobrescreve preço do produto pai se informado
+  stockOnHand Int     @default(0)
+  active      Boolean @default(true)
+  imageUrl    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product    Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  saleItems  SaleItem[]
+  movements  VariantStockMovement[]
+  comboItems ComboItem[]
+}
+
+// Movimento de estoque por variação
+model VariantStockMovement {
+  id        Int               @id @default(autoincrement())
+  variantId Int
+  type      StockMovementType
+  qty       Int
+  note      String?
+  actorUserId String
+  createdAt DateTime          @default(now())
+
+  variant ProductVariant @relation(fields: [variantId], references: [id])
+}
+
+// Combo: agrupa produtos/variações com preço especial
+model Combo {
+  id          Int     @id @default(autoincrement())
+  sku         String  @unique
+  name        String
+  imageUrl    String?
+  description String?
+  priceCents  Int     // preço especial do combo
+  costCents   Int?
+  active      Boolean @default(true)
+  desconto    Int?    // desconto adicional no combo
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items     ComboItem[]
   saleItems SaleItem[]
-  movements StockMovement[]
+}
+
+// Item dentro de um combo — pode ser produto simples ou variação específica
+// Se variantId for null e o produto tiver variações, o vendedor escolhe no momento da venda
+model ComboItem {
+  id        Int  @id @default(autoincrement())
+  comboId   Int
+  productId Int
+  variantId Int? // null = variação livre (escolhida na venda)
+  qty       Int  @default(1)
+  
+  // Rótulo para exibição no PDV (ex: "Camiseta", "Pulseira")
+  label     String?
+
+  combo   Combo           @relation(fields: [comboId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
 }
 
 model Sale {
   id                 Int           @id @default(autoincrement())
-  code               String        @unique // ex: EDL-000123
-  sellerUserId       String // Clerk userId
+  code               String        @unique
+  sellerUserId       String
   status             SaleStatus    @default(PAID)
   nomeComprador      String?
   nucleo             String?
@@ -42,32 +121,38 @@ model Sale {
   payment            PaymentMethod
   descontoVendaCents Int?
   createdAt          DateTime      @default(now())
-  updatedAt          DateTime?     @updatedAt // ✅ NOVO: para rastrear edições
+  updatedAt          DateTime?     @updatedAt
   items              SaleItem[]
 }
 
 model SaleItem {
-  id         Int @id @default(autoincrement())
+  id         Int  @id @default(autoincrement())
   saleId     Int
-  productId  Int
+  productId  Int?   // null se for combo puro
+  variantId  Int?   // variante escolhida (opcional)
+  comboId    Int?   // preenchido quando é um combo
   qty        Int
   unitCents  Int
   totalCents Int
 
-  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
+  // Snapshot das escolhas de variação do combo (JSON)
+  comboVariantSnapshot String? // JSON: [{comboItemId, variantId, label}]
+
+  sale    Sale            @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product?        @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
+  combo   Combo?          @relation(fields: [comboId], references: [id])
 }
 
 model StockMovement {
   id          Int               @id @default(autoincrement())
   productId   Int
   type        StockMovementType
-  qty         Int // + entrada / - saída
+  qty         Int
   note        String?
-  actorUserId String // Clerk userId
-
-  createdAt DateTime @default(now())
-  product   Product  @relation(fields: [productId], references: [id])
+  actorUserId String
+  createdAt   DateTime          @default(now())
+  product     Product           @relation(fields: [productId], references: [id])
 }
 
 enum SaleStatus {

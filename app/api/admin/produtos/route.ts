@@ -32,11 +32,13 @@ export async function GET() {
       id: true,
       sku: true,
       name: true,
-      imageUrl: true, // ✅ ADICIONADO
+      imageUrl: true,
       priceCents: true,
       costCents: true,
       active: true,
       stockOnHand: true,
+      hasVariants: true,
+      desconto: true,
     },
   })
 

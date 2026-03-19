@@ -7,29 +7,9 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-type ProdutoAPI = {
-  id: number
-  name: string
-  description: string | null
-  price: number
-  stock: number
-  image_url: string | null
-  category: string | null
-  discount: number // percentual 0–100
-}
-
-function asInt(v: any, name: string) {
-  const n = Number(v)
-  if (!Number.isFinite(n) || !Number.isInteger(n)) throw new Error(`${name} inválido`)
-  return n
-}
-
-function str(v: any) {
-  return String(v ?? "").trim()
-}
-
 export async function GET() {
-  const rows = await prisma.product.findMany({
+  // Produtos simples ativos
+  const produtos = await prisma.product.findMany({
     where: { active: true },
     orderBy: [{ name: "asc" }],
     select: {
@@ -38,22 +18,58 @@ export async function GET() {
       priceCents: true,
       stockOnHand: true,
       imageUrl: true,
-      desconto: true, // percentual 0–100
+      desconto: true,
+      hasVariants: true,
+      variants: {
+        where: { active: true },
+        select: {
+          id: true,
+          label: true,
+          color: true,
+          size: true,
+          priceCents: true,
+          stockOnHand: true,
+          imageUrl: true,
+        },
+        orderBy: [{ color: "asc" }, { size: "asc" }],
+      },
     },
   })
 
-  const data: ProdutoAPI[] = rows.map((p) => ({
-    id: p.id,
-    name: p.name,
-    description: null,
-    category: null,
-    image_url: p.imageUrl,
-    price: Number((p.priceCents ?? 0) / 100),
-    stock: Number(p.stockOnHand ?? 0),
-    discount: Number(p.desconto ?? 0),
-  }))
+  // Combos ativos
+  const combos = await prisma.combo.findMany({
+    where: { active: true },
+    orderBy: { name: "asc" },
+    include: {
+      items: {
+        include: {
+          product: {
+            select: {
+              id: true,
+              name: true,
+              hasVariants: true,
+              imageUrl: true,
+              variants: {
+                where: { active: true },
+                select: {
+                  id: true,
+                  label: true,
+                  color: true,
+                  size: true,
+                  stockOnHand: true,
+                },
+              },
+            },
+          },
+          variant: {
+            select: { id: true, label: true, color: true, size: true, stockOnHand: true },
+          },
+        },
+      },
+    },
+  })
 
-  return NextResponse.json(data)
+  return NextResponse.json({ produtos, combos })
 }
 
 export async function POST(req: Request) {
@@ -64,20 +80,18 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json()
-
-    const sku = str(body.sku)
-    const name = str(body.name)
+    const sku = String(body.sku ?? "").trim()
+    const name = String(body.name ?? "").trim()
     const imageUrl = body.imageUrl || null
-    const priceCents = asInt(body.priceCents, "priceCents")
-    const costCents = body.costCents == null ? null : asInt(body.costCents, "costCents")
+    const priceCents = Number(body.priceCents)
+    const costCents = body.costCents == null ? null : Number(body.costCents)
     const active = body.active == null ? true : Boolean(body.active)
-    const stockOnHand = body.stockOnHand == null ? 0 : asInt(body.stockOnHand, "stockOnHand")
-    const desconto = body.desconto == null ? 0 : Math.min(100, Math.max(0, asInt(body.desconto, "desconto")))
+    const stockOnHand = body.stockOnHand == null ? 0 : Number(body.stockOnHand)
+    const desconto = body.desconto == null ? 0 : Math.min(100, Math.max(0, Number(body.desconto)))
 
     if (!sku) throw new Error("sku obrigatório")
     if (!name) throw new Error("name obrigatório")
-    if (priceCents < 0) throw new Error("priceCents inválido")
-    if (stockOnHand < 0) throw new Error("stockOnHand inválido")
+    if (!Number.isFinite(priceCents) || priceCents < 0) throw new Error("priceCents inválido")
 
     const created = await prisma.product.create({
       data: { sku, name, imageUrl, priceCents, costCents, active, stockOnHand, desconto },

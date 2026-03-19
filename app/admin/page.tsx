@@ -81,7 +81,7 @@ export default function AdminDashboardPage() {
     fetcher
   )
 
-  const { data: productsData } = useSWR<Product[]>(
+  const { data: productsData } = useSWR<{ produtos: Product[] }>(
     "/api/products",
     fetcher
   )
@@ -151,7 +151,7 @@ export default function AdminDashboardPage() {
                   </SelectTrigger>
                   <SelectContent>
                     {/* <SelectItem value="">Todos os produtos</SelectItem> */}
-                    {productsData?.map((p) => (
+                    {productsData?.produtos?.map((p) => (
                       <SelectItem key={p.id} value={String(p.id)}>
                         {p.name}
                       </SelectItem>

@@ -41,7 +41,8 @@ export async function GET(_: Request, ctx: Ctx) {
       costCents: true,
       active: true,
       stockOnHand: true,
-      desconto: true, // percentual 0–100
+      desconto: true,
+      hasVariants: true,
     },
   })
 
@@ -110,6 +111,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
         active: true,
         stockOnHand: true,
         desconto: true,
+        hasVariants: true,
       },
     })
 
