@@ -1,7 +1,4 @@
 // app/api/minhas-vendas/route.ts
-// GET /api/minhas-vendas
-// Retorna todas as vendas do usuário autenticado, da mais recente para a mais antiga.
-
 import { NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import prisma from "@/lib/prisma"
@@ -19,7 +16,11 @@ export async function GET() {
     orderBy: { createdAt: "desc" },
     include: {
       items: {
-        include: { product: { select: { name: true } } },
+        include: {
+          product: { select: { name: true } },
+          variant: { select: { label: true } },
+          combo:   { select: { name: true } },
+        },
       },
     },
   })
@@ -34,13 +35,27 @@ export async function GET() {
     buyerName: v.nomeComprador,
     nucleo: v.nucleo,
     status: v.status,
-    itens: v.items.map((it) => ({
-      id: it.id,
-      nome: it.product?.name ?? `Produto #${it.productId}`,
-      qty: it.qty,
-      unitCents: it.unitCents,
-      totalCents: it.totalCents,
-    })),
+    itens: v.items.map((it) => {
+      // Resolve o nome do item: combo > produto+variante > produto simples
+      let nome: string
+      if (it.combo) {
+        nome = it.combo.name
+      } else if (it.product && it.variant) {
+        nome = `${it.product.name} — ${it.variant.label}`
+      } else if (it.product) {
+        nome = it.product.name
+      } else {
+        nome = "Item"
+      }
+
+      return {
+        id: it.id,
+        nome,
+        qty: it.qty,
+        unitCents: it.unitCents,
+        totalCents: it.totalCents,
+      }
+    }),
   }))
 
   return NextResponse.json({ vendas: payload })

@@ -5,12 +5,9 @@ import prisma from "@/lib/prisma"
 export async function GET(req: Request) {
   try {
     const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const url = new URL(req.url)
-
     const sellerUserId = url.searchParams.get("sellerUserId")
     const productId = url.searchParams.get("productId")
     const minValue = Number(url.searchParams.get("minValue") || 0) * 100
@@ -20,24 +17,24 @@ export async function GET(req: Request) {
       where: {
         status: "PAID",
         ...(sellerUserId && { sellerUserId }),
-        ...(minValue || maxValue
-          ? {
-              totalCents: {
-                ...(minValue && { gte: minValue }),
-                ...(maxValue && { lte: maxValue }),
-              },
-            }
-          : {}),
-        ...(productId && {
-          items: {
-            some: {
-              productId: Number(productId),
-            },
+        ...(minValue || maxValue ? {
+          totalCents: {
+            ...(minValue && { gte: minValue }),
+            ...(maxValue && { lte: maxValue }),
           },
+        } : {}),
+        ...(productId && {
+          items: { some: { productId: Number(productId) } },
         }),
       },
       include: {
-        items: { include: { product: true } },
+        items: {
+          include: {
+            product: { select: { id: true, name: true } },
+            variant: { select: { label: true } },
+            combo:   { select: { id: true, name: true } },
+          },
+        },
       },
     })
 
@@ -58,20 +55,41 @@ export async function GET(req: Request) {
       total,
     }))
 
-    // Top produtos
-    const prodMap: Record<number, { nome: string | null; quantidade: number; total: number }> = {}
+    // Top produtos/combos — chave: "p:id" ou "c:id"
+    const itemMap: Record<string, { nome: string; quantidade: number; total: number }> = {}
+
     for (const sale of sales) {
       for (const item of sale.items) {
-        if (!prodMap[item.productId ?? 0]) {
-          prodMap[item.productId ?? 0] = { nome: item.product?.name ?? '', quantidade: 0, total: 0 }
+        let key: string
+        let nome: string
+
+        if (item.combo) {
+          key = `c:${item.combo.id}`
+          nome = `🎁 ${item.combo.name}`
+        } else if (item.product && item.variant) {
+          // Variante: agrupa pelo produto pai
+          key = `p:${item.product.id}`
+          nome = item.product.name
+        } else if (item.product) {
+          key = `p:${item.product.id}`
+          nome = item.product.name
+        } else {
+          continue // item sem produto nem combo, ignora
         }
-        prodMap[item.productId ?? 0].quantidade += item.qty
-        prodMap[item.productId ?? 0].total += item.totalCents / 100
+
+        if (!itemMap[key]) {
+          itemMap[key] = { nome, quantidade: 0, total: 0 }
+        }
+        itemMap[key].quantidade += item.qty
+        itemMap[key].total += item.totalCents / 100
       }
     }
 
-    const topProdutos = Object.entries(prodMap)
-      .map(([id, data]) => ({ productId: Number(id), ...data }))
+    const topProdutos = Object.entries(itemMap)
+      .map(([key, data]) => ({
+        productId: key.startsWith("p:") ? Number(key.slice(2)) : Number(key.slice(2)),
+        ...data,
+      }))
       .sort((a, b) => b.total - a.total)
       .slice(0, 5)
 
@@ -103,8 +121,12 @@ export async function GET(req: Request) {
         })
     )
 
+    // Período dinâmico baseado nas vendas
+    const now = new Date()
+    const from = `${String(now.getDate()).padStart(2,"0")}/${String(now.getMonth()+1).padStart(2,"0")}`
+
     return NextResponse.json({
-      periodo: { from: "01/02", to: "07/02" },
+      periodo: { from, to: from },
       vendas: { quantidade, total, ticketMedio },
       pagamentos,
       topProdutos,

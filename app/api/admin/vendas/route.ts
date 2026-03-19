@@ -5,12 +5,9 @@ import prisma from "@/lib/prisma"
 export async function GET(req: Request) {
   try {
     const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
     const url = new URL(req.url)
-
     const take = Number(url.searchParams.get("take") || 20)
     const sellerUserId = url.searchParams.get("sellerUserId")
     const productId = url.searchParams.get("productId")
@@ -21,22 +18,24 @@ export async function GET(req: Request) {
       where: {
         status: "PAID",
         ...(sellerUserId && { sellerUserId }),
-        ...(minValue || maxValue
-          ? {
-              totalCents: {
-                ...(minValue && { gte: minValue }),
-                ...(maxValue && { lte: maxValue }),
-              },
-            }
-          : {}),
-        ...(productId && {
-          items: {
-            some: { productId: Number(productId) },
+        ...(minValue || maxValue ? {
+          totalCents: {
+            ...(minValue && { gte: minValue }),
+            ...(maxValue && { lte: maxValue }),
           },
+        } : {}),
+        ...(productId && {
+          items: { some: { productId: Number(productId) } },
         }),
       },
       include: {
-        items: { include: { product: true } },
+        items: {
+          include: {
+            product: { select: { name: true } },
+            variant: { select: { label: true } },
+            combo:   { select: { name: true } },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
       take,
@@ -59,11 +58,19 @@ export async function GET(req: Request) {
             user?.firstName ||
             user?.emailAddresses[0]?.emailAddress ||
             "Desconhecido",
-          itens: s.items.map((it) => ({
-            nome: it.product?.name,
-            qty: it.qty,
-            totalCents: it.totalCents,
-          })),
+          itens: s.items.map((it) => {
+            let nome: string
+            if (it.combo) {
+              nome = it.combo.name
+            } else if (it.product && it.variant) {
+              nome = `${it.product.name} — ${it.variant.label}`
+            } else if (it.product) {
+              nome = it.product.name
+            } else {
+              nome = "Item"
+            }
+            return { nome, qty: it.qty, totalCents: it.totalCents }
+          }),
         }
       })
     )
