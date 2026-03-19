@@ -60,7 +60,7 @@ export async function GET(req: Request) {
             user?.emailAddresses[0]?.emailAddress ||
             "Desconhecido",
           itens: s.items.map((it) => ({
-            nome: it.product.name,
+            nome: it.product?.name,
             qty: it.qty,
             totalCents: it.totalCents,
           })),

@@ -59,14 +59,14 @@ export async function GET(req: Request) {
     }))
 
     // Top produtos
-    const prodMap: Record<number, { nome: string; quantidade: number; total: number }> = {}
+    const prodMap: Record<number, { nome: string | null; quantidade: number; total: number }> = {}
     for (const sale of sales) {
       for (const item of sale.items) {
-        if (!prodMap[item.productId]) {
-          prodMap[item.productId] = { nome: item.product.name, quantidade: 0, total: 0 }
+        if (!prodMap[item.productId ?? 0]) {
+          prodMap[item.productId ?? 0] = { nome: item.product?.name ?? '', quantidade: 0, total: 0 }
         }
-        prodMap[item.productId].quantidade += item.qty
-        prodMap[item.productId].total += item.totalCents / 100
+        prodMap[item.productId ?? 0].quantidade += item.qty
+        prodMap[item.productId ?? 0].total += item.totalCents / 100
       }
     }
 

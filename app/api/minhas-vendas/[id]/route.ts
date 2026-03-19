@@ -116,13 +116,13 @@ export async function DELETE(_req: Request, { params }: Params) {
     // 2. Devolve estoque + registra movimentação para cada item
     for (const it of venda.items) {
       await tx.product.update({
-        where: { id: it.productId },
+        where: { id: it.productId  ?? 0},
         data: { stockOnHand: { increment: it.qty } },
       })
 
       await tx.stockMovement.create({
         data: {
-          productId: it.productId,
+          productId: it.productId ?? 0,
           type: "IN",
           qty: it.qty,
           actorUserId: userId,
