@@ -51,123 +51,88 @@ interface ComboCardProps {
   onRemover: () => void
 }
 
-const COLOR_CLASSES: Record<string, string> = {
-  vermelho: "bg-red-500", vermelha: "bg-red-500", red: "bg-red-500",
+const COLOR_DOT: Record<string, string> = {
+  vermelho: "bg-red-500", vermelha: "bg-red-500",
   bege: "bg-amber-200", beige: "bg-amber-200",
-  preto: "bg-gray-900", preta: "bg-gray-900", black: "bg-gray-900",
-  branco: "bg-white border border-gray-300", branca: "bg-white border border-gray-300",
-  azul: "bg-blue-500", blue: "bg-blue-500",
-  verde: "bg-green-500", green: "bg-green-500",
-  rosa: "bg-pink-400", pink: "bg-pink-400",
-  cinza: "bg-gray-400", gray: "bg-gray-400",
-  amarelo: "bg-yellow-400", yellow: "bg-yellow-400",
+  preto: "bg-gray-900", preta: "bg-gray-900",
+  branco: "bg-gray-100 border border-gray-300", branca: "bg-gray-100 border border-gray-300",
+  azul: "bg-blue-500", verde: "bg-green-500",
+  rosa: "bg-pink-400", cinza: "bg-gray-400",
+  amarelo: "bg-yellow-400",
 }
 
-function getColorClass(color: string | null) {
+function colorDot(color: string | null) {
   if (!color) return "bg-gray-300"
-  return COLOR_CLASSES[color.toLowerCase()] || "bg-gray-300"
+  return COLOR_DOT[color.toLowerCase()] || "bg-gray-300"
 }
 
-const SIZES_ORDER = ["PP", "P", "M", "G", "GG", "XG", "XGG", "2XG", "3XG"]
-
-// ─── Componente separado para seletor de variação de um item livre ────────────
-// MOTIVO: useState não pode ser chamado dentro de .map() — viola Rules of Hooks.
-// Cada item livre precisa do seu próprio estado de cor selecionada,
-// então extraímos para um componente próprio.
-
-interface FreeItemSelectorProps {
+// Seletor simplificado: todos os botões visíveis de uma vez, sem passos ocultos
+function FreeItemSelector({
+  ci, chosenVariantId, attempted, onChoose,
+}: {
   ci: ComboItemAPI
   chosenVariantId: number | undefined
   attempted: boolean
   onChoose: (comboItemId: number, variantId: number) => void
-}
-
-function FreeItemSelector({ ci, chosenVariantId, attempted, onChoose }: FreeItemSelectorProps) {
-  // ✅ useState aqui é válido — está no nível do componente, não dentro de map()
-  const [localColor, setLocalColor] = useState<string | null>(null)
-
-  const cores = Array.from(
-    new Set(ci.product.variants.map(v => v.color || "").filter(Boolean))
-  )
-
-  // Auto-seleciona se só tem 1 cor
-  const corAtiva = cores.length === 1 ? cores[0] : localColor
-
-  const tamanhosDaCor = corAtiva
-    ? ci.product.variants
-        .filter(v => v.color?.toLowerCase() === corAtiva.toLowerCase())
-        .sort((a, b) => {
-          const ia = SIZES_ORDER.indexOf(a.size || "")
-          const ib = SIZES_ORDER.indexOf(b.size || "")
-          if (ia !== -1 && ib !== -1) return ia - ib
-          return (a.size || "").localeCompare(b.size || "")
-        })
-    : []
-
+}) {
+  const variants = ci.product.variants
+  const chosen = variants.find(v => v.id === chosenVariantId)
   const missing = attempted && !chosenVariantId
+  const hasCores = variants.some(v => v.color)
+  const hasTamanhos = variants.some(v => v.size)
 
   return (
-    <div className={`rounded-xl p-2 border transition-all ${missing ? "border-red-300 bg-red-50" : "border-gray-100 bg-white"}`}>
-      <p className="text-[10px] font-bold text-gray-700 mb-1.5 flex items-center gap-1">
-        {ci.label || ci.product.name}
-        {chosenVariantId
-          ? <Check className="h-3 w-3 text-green-500" />
-          : <span className="text-gray-400 font-normal italic">(escolher)</span>}
-      </p>
+    <div className={`rounded-xl border-2 p-2.5 transition-all ${
+      missing ? "border-red-300 bg-red-50/50"
+      : chosen ? "border-green-200 bg-green-50/30"
+      : "border-gray-200 bg-white"
+    }`}>
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-bold text-gray-700">{ci.label || ci.product.name}</p>
+        {chosen ? (
+          <span className="flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-100 rounded-full px-2 py-0.5">
+            <Check className="h-3 w-3" />{chosen.label}
+          </span>
+        ) : (
+          <span className="text-[10px] text-gray-400 italic">escolher</span>
+        )}
+      </div>
 
-      {/* Cores — só mostra se tiver mais de 1 */}
-      {cores.length > 1 && (
-        <div className="flex flex-wrap gap-1 mb-1.5">
-          {cores.map(cor => (
+      <div className="flex flex-wrap gap-1.5">
+        {variants.map(v => {
+          const esgotado = v.stockOnHand <= 0
+          const selecionado = chosenVariantId === v.id
+          const btnLabel = hasCores && hasTamanhos
+            ? `${v.color ?? ""} ${v.size ?? ""}`.trim()
+            : hasCores ? (v.color ?? v.label)
+            : (v.size ?? v.label)
+
+          return (
             <button
-              key={cor}
-              title={cor}
-              onClick={() => setLocalColor(cor)}
-              className={`h-5 w-5 rounded-full transition-all ${getColorClass(cor)} ${
-                corAtiva === cor
-                  ? "ring-2 ring-offset-1 ring-red-500 scale-110"
-                  : "hover:scale-105"
+              key={v.id}
+              onClick={() => !esgotado && onChoose(ci.id, v.id)}
+              disabled={esgotado}
+              title={v.label}
+              className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-bold border-2 transition-all ${
+                selecionado
+                  ? "border-red-500 bg-red-500 text-white scale-105 shadow-sm"
+                  : esgotado
+                  ? "border-gray-100 bg-gray-50 text-gray-300 line-through cursor-not-allowed"
+                  : "border-gray-200 bg-white text-gray-700 hover:border-red-300 hover:bg-red-50"
               }`}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Tamanhos */}
-      {corAtiva && tamanhosDaCor.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {tamanhosDaCor.map(v => {
-            const esgotado = v.stockOnHand <= 0
-            const selecionado = chosenVariantId === v.id
-            return (
-              <button
-                key={v.id}
-                onClick={() => !esgotado && onChoose(ci.id, v.id)}
-                disabled={esgotado}
-                className={`min-w-[26px] h-6 px-1.5 rounded text-[10px] font-bold border transition-all ${
-                  selecionado
-                    ? "bg-red-600 text-white border-red-600"
-                    : esgotado
-                    ? "bg-gray-100 text-gray-300 border-gray-200 line-through cursor-not-allowed"
-                    : "bg-white text-gray-700 border-gray-300 hover:border-red-400"
-                }`}
-              >
-                {v.size || v.label}
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Aviso se não selecionou cor ainda (mais de 1 cor) */}
-      {cores.length > 1 && !corAtiva && (
-        <p className="text-[10px] text-gray-400">Escolha a cor primeiro</p>
-      )}
+            >
+              {v.color && (
+                <span className={`h-2.5 w-2.5 rounded-full flex-shrink-0 ${colorDot(v.color)}`} />
+              )}
+              {btnLabel}
+              {esgotado && <span className="text-[9px] font-normal ml-0.5">(esg.)</span>}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
-
-// ─── ComboCard ────────────────────────────────────────────────────────────────
 
 export function ComboCard({ combo, quantidade, onAdicionar, onRemover }: ComboCardProps) {
   const [choices, setChoices] = useState<ComboVariantChoices>({})
@@ -176,6 +141,7 @@ export function ComboCard({ combo, quantidade, onAdicionar, onRemover }: ComboCa
 
   const freeItems = combo.items.filter(ci => ci.variantId === null && ci.product.hasVariants)
   const allChosen = freeItems.every(ci => choices[ci.id] != null)
+  const pendingCount = freeItems.filter(ci => choices[ci.id] == null).length
 
   const temDesconto = combo.desconto > 0
   const precoFinal = temDesconto ? combo.preco * (1 - combo.desconto / 100) : combo.preco
@@ -187,15 +153,21 @@ export function ComboCard({ combo, quantidade, onAdicionar, onRemover }: ComboCa
       return
     }
     onAdicionar(choices)
+    setChoices({})
+    setAttempted(false)
+    setExpanded(false)
   }
 
   function setChoice(comboItemId: number, variantId: number) {
-    setChoices(prev => ({ ...prev, [comboItemId]: variantId }))
+    setChoices(prev => {
+      const next = { ...prev, [comboItemId]: variantId }
+      if (freeItems.every(ci => next[ci.id] != null)) setExpanded(false)
+      return next
+    })
   }
 
   return (
     <div className="group flex flex-col overflow-hidden rounded-2xl sm:rounded-3xl border-2 border-red-200 bg-gradient-to-br from-red-50 to-white shadow-md transition-all hover:shadow-xl">
-      {/* Imagem */}
       <div className="relative flex h-32 sm:h-36 items-center justify-center bg-gradient-to-br from-red-100 to-pink-100">
         {combo.imagemUrl ? (
           <img src={combo.imagemUrl} alt={combo.nome} className="h-full w-full object-cover" crossOrigin="anonymous" />
@@ -205,63 +177,64 @@ export function ComboCard({ combo, quantidade, onAdicionar, onRemover }: ComboCa
             <span className="text-[10px] font-bold text-red-400 uppercase tracking-wide">Combo</span>
           </div>
         )}
-
-        <Badge className="absolute left-1.5 top-1.5 rounded-full bg-gradient-to-r from-red-600 to-pink-600 text-[10px] font-bold text-white shadow-sm px-2 py-0.5">
+        <Badge className="absolute left-1.5 top-1.5 rounded-full bg-gradient-to-r from-red-600 to-pink-600 text-[10px] font-bold text-white px-2 py-0.5">
           COMBO
         </Badge>
-
         {temDesconto && (
-          <Badge className="absolute right-1.5 top-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-[10px] font-bold text-white shadow-sm px-2 py-0.5 flex items-center gap-0.5">
+          <Badge className="absolute right-1.5 top-1.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-[10px] font-bold text-white px-2 py-0.5 flex items-center gap-0.5">
             <Tag className="h-2.5 w-2.5" />-{combo.desconto}%
           </Badge>
         )}
       </div>
 
-      {/* Body */}
       <div className="flex flex-1 flex-col gap-2 p-2.5 sm:p-3">
         <h3 className="text-sm sm:text-base font-bold leading-tight text-gray-900">{combo.nome}</h3>
+        {combo.descricao && <p className="text-[10px] text-gray-500 line-clamp-1">{combo.descricao}</p>}
 
-        {combo.descricao && (
-          <p className="text-[10px] text-gray-500 line-clamp-2">{combo.descricao}</p>
-        )}
-
-        {/* Lista resumida dos itens */}
+        {/* Itens resumidos */}
         <div className="space-y-0.5">
           {combo.items.map(ci => {
             const isFree = ci.variantId === null && ci.product.hasVariants
-            const chosenVariant = isFree && choices[ci.id]
+            const chosen = isFree && choices[ci.id]
               ? ci.product.variants.find(v => v.id === choices[ci.id])
               : ci.variant
             const missing = attempted && isFree && !choices[ci.id]
-
             return (
-              <div key={ci.id} className={`flex items-center gap-1.5 ${missing ? "text-red-500" : "text-gray-600"}`}>
+              <div key={ci.id} className={`flex items-center gap-1.5 text-[10px] ${missing ? "text-red-500" : "text-gray-600"}`}>
                 <div className={`h-1.5 w-1.5 rounded-full flex-shrink-0 ${missing ? "bg-red-400" : "bg-red-300"}`} />
-                <span className="text-[10px]">
+                <span>
                   {ci.qty > 1 && <span className="font-bold">{ci.qty}x </span>}
                   {ci.label || ci.product.name}
-                  {chosenVariant && <span className="text-red-600 font-medium"> — {chosenVariant.label}</span>}
-                  {isFree && !chosenVariant && <span className="text-gray-400 italic"> (escolher)</span>}
+                  {chosen
+                    ? <span className="text-red-600 font-semibold"> — {chosen.label}</span>
+                    : isFree && <span className="text-gray-400 italic"> (escolher)</span>}
                 </span>
               </div>
             )
           })}
         </div>
 
-        {/* Seletores de variação livre */}
+        {/* Seletor de variações */}
         {freeItems.length > 0 && (
           <div>
             <button
               onClick={() => setExpanded(e => !e)}
-              className="flex items-center gap-1 text-[10px] font-semibold text-red-600 hover:text-red-700"
+              className={`flex items-center gap-1.5 text-[11px] font-bold rounded-lg px-2.5 py-1.5 w-full transition-all ${
+                allChosen
+                  ? "text-green-700 bg-green-50 border border-green-200"
+                  : attempted && !allChosen
+                  ? "text-red-600 bg-red-50 border border-red-200"
+                  : "text-red-600 bg-red-50/50 border border-red-100 hover:bg-red-50"
+              }`}
             >
               {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-              {allChosen ? "Variações escolhidas ✓" : "Escolher variações"}
+              {allChosen
+                ? <><Check className="h-3 w-3 text-green-600" /> Variações escolhidas!</>
+                : `Escolher variações${pendingCount > 0 ? ` (${pendingCount} faltando)` : ""}`}
             </button>
 
             {expanded && (
-              <div className="mt-2 space-y-2 rounded-xl bg-red-50 p-2 border border-red-100">
-                {/* ✅ FreeItemSelector é um componente separado — pode usar useState */}
+              <div className="mt-2 space-y-2">
                 {freeItems.map(ci => (
                   <FreeItemSelector
                     key={ci.id}
@@ -281,7 +254,7 @@ export function ComboCard({ combo, quantidade, onAdicionar, onRemover }: ComboCa
           <div>
             {temDesconto ? (
               <>
-                <p className="text-[10px] text-gray-400 line-through">
+                <p className="text-[10px] text-gray-400 line-through leading-none">
                   R$ {combo.preco.toFixed(2).replace(".", ",")}
                 </p>
                 <p className="text-base sm:text-lg font-bold text-red-600">
@@ -311,15 +284,18 @@ export function ComboCard({ combo, quantidade, onAdicionar, onRemover }: ComboCa
             </div>
           ) : (
             <Button size="sm"
-              className="rounded-full bg-gradient-to-r from-red-600 to-red-500 font-bold shadow-md text-xs h-7 px-2.5"
+              className="rounded-full font-bold shadow-md text-xs h-7 px-2.5 bg-gradient-to-r from-red-600 to-red-500"
               onClick={handleAdicionar}>
-              <Plus className="mr-0.5 h-3 w-3" />Add
+              <Plus className="mr-0.5 h-3 w-3" />
+              {freeItems.length > 0 && !allChosen ? "Escolher" : "Add"}
             </Button>
           )}
         </div>
 
         {attempted && !allChosen && (
-          <p className="text-[10px] text-red-500 font-medium">Escolha as variações acima para adicionar</p>
+          <p className="text-[10px] text-red-500 font-medium">
+            ⚠ Escolha as variações acima antes de adicionar
+          </p>
         )}
       </div>
     </div>
