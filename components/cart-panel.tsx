@@ -31,9 +31,9 @@ export type ItemCarrinho = {
 
 // ─────────────────────────────────────────────────────────────────────────────
 const PIX_CONFIG = {
-  chave: "wagnerigor9@gmail.com",
-  nomeRecebedor: "Igor Wagner Gomes da Silva",
-  cidade: "Joao Pessoa",
+  chave: "marcellacamillyreis@gmail.com",
+  nomeRecebedor: "Marcella Camilly Reis Silva",
+  cidade: "Viçosa",
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
