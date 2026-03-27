@@ -1,10 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Package, Plus, Minus, Tag, Check, ShoppingCart } from "lucide-react"
+import { Package, Plus, Minus, Tag, Check, ShoppingCart, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 export interface VarianteAPI {
   id: number
@@ -57,6 +56,8 @@ function getColorClass(color: string | null) {
 }
 
 // ─── Modal de seleção de variante ─────────────────────────────────────────────
+// Usa overlay manual com fixed + z-[9999] para garantir que apareça
+// independente de qualquer overflow:hidden ou transform nos elementos pai.
 
 function VariantModal({
   open, onClose, produto, onAdicionar, onRemover, qtdPorVariante,
@@ -74,33 +75,50 @@ function VariantModal({
     new Set(produto.variantes.map(v => v.color || "").filter(Boolean))
   )
 
-  // Auto-seleciona se só tem 1 cor
   const corAtiva = cores.length === 1 ? cores[0] : selectedColor
 
   const variantesDaCor = corAtiva
     ? produto.variantes
-        .filter(v => v.color?.toLowerCase() === corAtiva.toLowerCase())
-        .sort((a, b) => {
-          const ia = SIZES_ORDER.indexOf(a.size || "")
-          const ib = SIZES_ORDER.indexOf(b.size || "")
-          if (ia !== -1 && ib !== -1) return ia - ib
-          return (a.size || "").localeCompare(b.size || "")
-        })
+      .filter(v => v.color?.toLowerCase() === corAtiva.toLowerCase())
+      .sort((a, b) => {
+        const ia = SIZES_ORDER.indexOf(a.size || "")
+        const ib = SIZES_ORDER.indexOf(b.size || "")
+        if (ia !== -1 && ib !== -1) return ia - ib
+        return (a.size || "").localeCompare(b.size || "")
+      })
     : produto.variantes
 
   const temDesconto = produto.desconto > 0
   const totalNoCarrinho = Object.values(qtdPorVariante).reduce((s, q) => s + q, 0)
 
+  if (!open) return null
+
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-sm rounded-3xl border-0 shadow-2xl p-0 overflow-hidden">
-        <div className="bg-gradient-to-br from-red-600 to-rose-500 p-4 text-white">
-          <DialogHeader>
-            <DialogTitle className="text-white font-bold text-base flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4" />
-              Escolher variação
-            </DialogTitle>
-          </DialogHeader>
+    // fixed + inset-0 + z-[9999] garante que o overlay cubra a viewport
+    // independente de transforms, overflow ou scroll da página
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div
+        className="relative w-full max-w-sm max-h-[85vh] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        {/* Botão fechar */}
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 z-10 rounded-full bg-white/20 hover:bg-white/30 p-1 text-white transition-colors"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        {/* Cabeçalho fixo */}
+        <div className="bg-gradient-to-br from-red-600 to-rose-500 p-4 text-white flex-shrink-0">
+          <p className="text-white font-bold text-base flex items-center gap-2">
+            <ShoppingCart className="h-4 w-4" />
+            Escolher variação
+          </p>
           <p className="text-red-100 text-sm mt-0.5 font-medium truncate">{produto.nome}</p>
           <div className="flex items-baseline gap-2 mt-1">
             <p className="text-2xl font-black">
@@ -114,7 +132,9 @@ function VariantModal({
           </div>
         </div>
 
-        <div className="p-4 space-y-4">
+        {/* Corpo com scroll */}
+        <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
+
           {/* Seletor de cores */}
           {cores.length > 1 && (
             <div>
@@ -139,7 +159,7 @@ function VariantModal({
             </div>
           )}
 
-          {/* Variantes (tamanhos ou lista) */}
+          {/* Variantes */}
           {(corAtiva || cores.length === 0) && (
             <div>
               <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
@@ -158,8 +178,8 @@ function VariantModal({
                       key={v.id}
                       className={`flex items-center justify-between rounded-xl border-2 px-3 py-2.5 transition-all ${
                         esgotado ? "border-gray-100 bg-gray-50 opacity-50"
-                        : qtd > 0 ? "border-red-300 bg-red-50"
-                        : "border-gray-200 bg-white hover:border-red-200"
+                          : qtd > 0 ? "border-red-300 bg-red-50"
+                            : "border-gray-200 bg-white hover:border-red-200"
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
@@ -207,8 +227,10 @@ function VariantModal({
               </div>
             </div>
           )}
+        </div>
 
-          {/* Footer */}
+        {/* Footer fixo */}
+        <div className="flex-shrink-0 px-4 pb-4 pt-2 border-t border-gray-100 bg-white">
           {totalNoCarrinho > 0 ? (
             <div className="rounded-xl bg-green-50 border border-green-200 px-3 py-2 flex items-center justify-between">
               <p className="text-xs font-bold text-green-700">
@@ -221,13 +243,15 @@ function VariantModal({
               </Button>
             </div>
           ) : (
-            <Button variant="outline" className="w-full rounded-full border-gray-200 text-gray-600 text-sm" onClick={onClose}>
+            <Button variant="outline"
+              className="w-full rounded-full border-gray-200 text-gray-600 text-sm"
+              onClick={onClose}>
               Cancelar
             </Button>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   )
 }
 
