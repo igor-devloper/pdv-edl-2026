@@ -2,7 +2,10 @@
 
 import { cn } from "@/lib/utils"
 import { UserButton, useUser } from "@clerk/nextjs"
-import { ShoppingBag, LayoutDashboard, Package, Users, AlertTriangle, Menu, Receipt, PieChart, Gift, Crown } from "lucide-react"
+import {
+  ShoppingBag, LayoutDashboard, Package, Users, AlertTriangle,
+  Menu, Receipt, PieChart, Gift, Crown,
+} from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { getCargoFromUser, isAdminCargo, isIgorCargo } from "@/lib/cargo-client"
@@ -16,136 +19,89 @@ export function Header() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
-  const cargo = getCargoFromUser(user)
-  const isAdmin = isAdminCargo(cargo)
-  const isIgor  = isIgorCargo(cargo)
+  const cargo    = getCargoFromUser(user)
+  const isAdmin  = isAdminCargo(cargo)
+  const isIgor   = isIgorCargo(cargo)
   const semCargo = isLoaded && !!user && cargo === ""
-  const logado = isLoaded && !!user
+  const logado   = isLoaded && !!user
+
+  // Helper para o estilo dos links
+  const linkClass = (active: boolean, igor = false) =>
+    cn(
+      "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all",
+      active
+        ? igor
+          ? "bg-gradient-to-r from-yellow-500 to-amber-500 text-white shadow-md shadow-yellow-200"
+          : "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-md"
+        : igor
+          ? "text-yellow-600 hover:bg-yellow-50 hover:text-yellow-700"
+          : "text-gray-600 hover:bg-red-50 hover:text-red-600"
+    )
 
   const NavLinks = () => (
     <>
       {/* PDV — visível para todos */}
-      <Link
-        href="/"
-        onClick={() => setOpen(false)}
-        className={cn(
-          "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all",
-          pathname === "/"
-            ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-md"
-            : "text-gray-600 hover:bg-red-50 hover:text-red-600"
-        )}
-      >
+      <Link href="/" onClick={() => setOpen(false)} className={linkClass(pathname === "/")}>
         <ShoppingBag className="h-4 w-4" />
         <span>Vendas</span>
       </Link>
 
-      {/* Minhas Vendas */}
+      {/* Minhas Vendas — qualquer logado */}
       {logado && (
-        <Link
-          href="/minhas-vendas"
-          onClick={() => setOpen(false)}
-          className={cn(
-            "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all",
-            pathname === "/minhas-vendas"
-              ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-md"
-              : "text-gray-600 hover:bg-red-50 hover:text-red-600"
-          )}
-        >
+        <Link href="/minhas-vendas" onClick={() => setOpen(false)} className={linkClass(pathname === "/minhas-vendas")}>
           <Receipt className="h-4 w-4" />
           <span>Minhas Vendas</span>
         </Link>
       )}
 
-      {/* Links exclusivos ADMIN (mas não IGOR — ele tem painel próprio) */}
+      {/* ADMIN normal — Dashboard, Estoque, Combos, Cargos, Núcleos */}
       {isAdmin && !isIgor && (
         <>
-          <Link
-            href="/admin"
-            onClick={() => setOpen(false)}
-            className={cn(
-              "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all",
-              pathname === "/admin"
-                ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-md"
-                : "text-gray-600 hover:bg-red-50 hover:text-red-600"
-            )}
-          >
+          <Link href="/admin" onClick={() => setOpen(false)} className={linkClass(pathname === "/admin")}>
             <LayoutDashboard className="h-4 w-4" />
             <span>Dashboard</span>
           </Link>
 
-          <Link
-            href="/admin/estoque"
-            onClick={() => setOpen(false)}
-            className={cn(
-              "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all",
-              pathname.startsWith("/admin/estoque")
-                ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-md"
-                : "text-gray-600 hover:bg-red-50 hover:text-red-600"
-            )}
-          >
+          <Link href="/admin/estoque" onClick={() => setOpen(false)} className={linkClass(pathname.startsWith("/admin/estoque"))}>
             <Package className="h-4 w-4" />
             <span>Estoque</span>
           </Link>
 
-          <Link
-            href="/admin/combos"
-            onClick={() => setOpen(false)}
-            className={cn(
-              "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all",
-              pathname.startsWith("/admin/combos")
-                ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-md"
-                : "text-gray-600 hover:bg-red-50 hover:text-red-600"
-            )}
-          >
+          <Link href="/admin/combos" onClick={() => setOpen(false)} className={linkClass(pathname.startsWith("/admin/combos"))}>
             <Gift className="h-4 w-4" />
             <span>Combos</span>
           </Link>
 
-          <Link
-            href="/admin/cargos"
-            onClick={() => setOpen(false)}
-            className={cn(
-              "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all",
-              pathname.startsWith("/admin/cargos")
-                ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-md"
-                : "text-gray-600 hover:bg-red-50 hover:text-red-600"
-            )}
-          >
+          <Link href="/admin/cargos" onClick={() => setOpen(false)} className={linkClass(pathname.startsWith("/admin/cargos"))}>
             <Users className="h-4 w-4" />
             <span>Cargos</span>
           </Link>
 
-          <Link
-            href="/admin/nucleos"
-            onClick={() => setOpen(false)}
-            className={cn(
-              "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all",
-              pathname.startsWith("/admin/nucleos")
-                ? "bg-gradient-to-r from-red-600 to-red-500 text-white shadow-md"
-                : "text-gray-600 hover:bg-red-50 hover:text-red-600"
-            )}
-          >
+          <Link href="/admin/nucleos" onClick={() => setOpen(false)} className={linkClass(pathname.startsWith("/admin/nucleos"))}>
             <PieChart className="h-4 w-4" />
             <span>Núcleos</span>
           </Link>
         </>
       )}
 
-      {/* Painel Supremo — exclusivo IGOR */}
+      {/* IGOR — Estoque, Cargos e Painel Supremo */}
       {isIgor && (
-        <Link
-          href="/igor"
-          onClick={() => setOpen(false)}
-          className={cn(
-            "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all",
-            pathname.startsWith("/igor")
-              ? "bg-gradient-to-r from-yellow-500 to-amber-500 text-white shadow-md shadow-yellow-200"
-              : "text-yellow-600 hover:bg-yellow-50 hover:text-yellow-700"
-          )}
-        >
-          <Crown className="h-4 w-4" />
-          <span>Supremo</span>
-        </Link>
+        <>
+          <Link href="/admin/estoque" onClick={() => setOpen(false)} className={linkClass(pathname.startsWith("/admin/estoque"))}>
+            <Package className="h-4 w-4" />
+            <span>Estoque</span>
+          </Link>
+
+          <Link href="/admin/cargos" onClick={() => setOpen(false)} className={linkClass(pathname.startsWith("/admin/cargos"))}>
+            <Users className="h-4 w-4" />
+            <span>Cargos</span>
+          </Link>
+
+          <Link href="/igor" onClick={() => setOpen(false)} className={linkClass(pathname.startsWith("/igor"), true)}>
+            <Crown className="h-4 w-4" />
+            <span>Supremo</span>
+          </Link>
+        </>
       )}
     </>
   )

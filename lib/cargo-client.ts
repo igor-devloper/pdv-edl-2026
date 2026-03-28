@@ -7,13 +7,9 @@ export function getCargoFromUser(user: UserResource | null | undefined): Cargo {
   const raw = (user?.publicMetadata as { role?: unknown } | undefined)?.role
   const role = typeof raw === "string" ? raw.trim().toUpperCase() : ""
   if (
-    role === "ADMIN" ||
-    role === "CAIXA" ||
-    role === "ESTOQUISTA" ||
-    role === "SUPPORT" ||
-    role === "IGOR"
-  )
-    return role
+    role === "ADMIN" || role === "CAIXA" || role === "ESTOQUISTA" ||
+    role === "SUPPORT" || role === "IGOR"
+  ) return role
   return ""
 }
 

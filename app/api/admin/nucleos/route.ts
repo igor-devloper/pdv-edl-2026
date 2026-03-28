@@ -1,7 +1,7 @@
 // app/api/admin/nucleos/route.ts
 // GET /api/admin/nucleos
 // Retorna ranking de vendas agrupado por núcleo para o dashboard.
-// Protegido: apenas ADMIN.
+// Protegido: ADMIN e IGOR.
 
 import { NextResponse } from "next/server"
 import { auth, clerkClient } from "@clerk/nextjs/server"
@@ -22,10 +22,9 @@ export async function GET(req: Request) {
   if (!userId) return NextResponse.json({ error: "não autenticado" }, { status: 401 })
 
   const role = await getRole(userId)
-  if (role !== "ADMIN")
+  if (role !== "ADMIN" && role !== "IGOR")
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 })
 
-  // Query params opcionais: ?from=2024-01-01&to=2024-12-31
   const { searchParams } = new URL(req.url)
   const fromRaw = searchParams.get("from")
   const toRaw   = searchParams.get("to")
@@ -45,7 +44,6 @@ export async function GET(req: Request) {
     if (toRaw)   where.createdAt.lte = new Date(toRaw + "T23:59:59Z")
   }
 
-  // Agrupamento por núcleo
   const grouped = await prisma.sale.groupBy({
     by: ["nucleo"],
     where,
@@ -54,15 +52,14 @@ export async function GET(req: Request) {
     orderBy: { _sum: { totalCents: "desc" } },
   })
 
-  // Totais gerais (para % de participação)
-  const totalGeral = grouped.reduce((acc, g) => acc + (g._sum.totalCents ?? 0), 0)
+  const totalGeral  = grouped.reduce((acc, g) => acc + (g._sum.totalCents ?? 0), 0)
   const vendasGeral = grouped.reduce((acc, g) => acc + g._count.id, 0)
 
   const nucleos = grouped.map((g) => {
     const totalCents  = g._sum.totalCents ?? 0
     const totalVendas = g._count.id
     return {
-      nucleo:        g.nucleo ?? "Não informado",
+      nucleo:          g.nucleo ?? "Não informado",
       totalCents,
       totalVendas,
       ticketMedioCents: totalVendas > 0 ? Math.round(totalCents / totalVendas) : 0,

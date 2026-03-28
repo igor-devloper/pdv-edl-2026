@@ -8,8 +8,6 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Crown } from "lucide-react"
 
-// ─── IgorGuard ────────────────────────────────────────────────────────────────
-// Protege rotas exclusivas do cargo IGOR (Supremo).
 export function IgorGuard({ children }: { children: React.ReactNode }) {
   const { user, isLoaded } = useUser()
 

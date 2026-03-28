@@ -7,16 +7,10 @@ export const dynamic = "force-dynamic"
 export const revalidate = 0
 
 type Cargo = "ADMIN" | "CAIXA" | "ESTOQUISTA" | "SUPPORT" | "IGOR"
-type Body = { role: Cargo }
+type Body  = { role: Cargo }
 
 function isCargo(v: unknown): v is Cargo {
-  return (
-    v === "ADMIN" ||
-    v === "CAIXA" ||
-    v === "ESTOQUISTA" ||
-    v === "SUPPORT" ||
-    v === "IGOR"
-  )
+  return v === "ADMIN" || v === "CAIXA" || v === "ESTOQUISTA" || v === "SUPPORT" || v === "IGOR"
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ userId: string }> }) {
@@ -27,7 +21,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ userId: strin
   if (!isAdmin(cargo)) return NextResponse.json({ error: "sem permissão" }, { status: 403 })
 
   const targetId = (await ctx.params).userId
-  const raw = (await req.json().catch(() => null)) as unknown
+  const raw  = (await req.json().catch(() => null)) as unknown
   const role = (raw as Body | null)?.role
 
   if (!isCargo(role)) return NextResponse.json({ error: "role inválida" }, { status: 400 })
