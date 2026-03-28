@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "sonner"
 import { Input } from "@/components/ui/input"
+import { Crown } from "lucide-react"
 
-type Cargo = "ADMIN" | "CAIXA" | "ESTOQUISTA" | "SUPPORT"
+type Cargo = "ADMIN" | "CAIXA" | "ESTOQUISTA" | "SUPPORT" | "IGOR"
 
 type UsuarioRow = {
   id: string
@@ -24,6 +25,14 @@ type UsuarioRow = {
 type Resp = { users: UsuarioRow[] }
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json())
+
+const CARGO_LABELS: Record<Cargo, { label: string; desc: string; color: string }> = {
+  ADMIN:      { label: "ADMIN",      desc: "Acesso completo ao painel admin",    color: "text-red-700 bg-red-50" },
+  CAIXA:      { label: "CAIXA",      desc: "Pode vender no PDV",                color: "text-blue-700 bg-blue-50" },
+  ESTOQUISTA: { label: "ESTOQUISTA", desc: "Gerencia estoque",                   color: "text-green-700 bg-green-50" },
+  SUPPORT:    { label: "SUPPORT",    desc: "Suporte / visualização",             color: "text-gray-700 bg-gray-50" },
+  IGOR:       { label: "IGOR 👑",    desc: "Cargo supremo — acesso total",       color: "text-yellow-700 bg-yellow-50" },
+}
 
 export default function AdminCargosPage() {
   const { data, mutate } = useSWR<Resp>("/api/admin/usuarios", fetcher)
@@ -59,8 +68,8 @@ export default function AdminCargosPage() {
 
       toast.success("Cargo atualizado!")
       await mutate()
-    } catch (e: any) {
-      toast.error(e?.message || "Erro ao atualizar cargo")
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erro ao atualizar cargo")
     } finally {
       setSalvando(null)
     }
@@ -96,17 +105,42 @@ export default function AdminCargosPage() {
             />
           </div>
 
+          {/* Legenda de cargos */}
+          {/* <Card className="rounded-2xl border-gray-100 p-4">
+            <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Legenda de cargos</p>
+            <div className="flex flex-wrap gap-2">
+              {(Object.entries(CARGO_LABELS) as [Cargo, typeof CARGO_LABELS[Cargo]][]).map(([cargo, info]) => (
+                <span key={cargo} className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full border ${info.color}`}>
+                  {cargo === "IGOR" && <Crown className="h-3 w-3" />}
+                  {info.label}
+                  <span className="font-normal opacity-70">— {info.desc}</span>
+                </span>
+              ))}
+            </div>
+          </Card> */}
+
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {usuarios.map((u) => {
               const current = (u.role || "CAIXA").toUpperCase() as Cargo
               const draft = draftRoles[u.id] ?? current
               const mudou = draft !== current
+              const isIgorCargo = draft === "IGOR"
 
               return (
-                <Card key={u.id} className="rounded-3xl border-red-100 p-4 shadow-md">
+                <Card
+                  key={u.id}
+                  className={`rounded-3xl p-4 shadow-md transition-all ${
+                    isIgorCargo
+                      ? "border-yellow-300 bg-gradient-to-br from-yellow-50 to-amber-50/50"
+                      : "border-red-100"
+                  }`}
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate font-bold text-gray-900">{u.nome}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="truncate font-bold text-gray-900">{u.nome}</p>
+                        {current === "IGOR" && <Crown className="h-4 w-4 text-yellow-500 flex-shrink-0" />}
+                      </div>
                       <p className="truncate text-xs text-gray-500">{u.email ?? "-"}</p>
                       <p className="mt-1 text-xs text-gray-600">
                         Atual: <b>{current}</b>
@@ -120,7 +154,7 @@ export default function AdminCargosPage() {
                           setDraftRoles((prev) => ({ ...prev, [u.id]: v as Cargo }))
                         }
                       >
-                        <SelectTrigger className="rounded-full">
+                        <SelectTrigger className={`rounded-full ${isIgorCargo ? "border-yellow-300 bg-white" : ""}`}>
                           <SelectValue placeholder="Cargo" />
                         </SelectTrigger>
                         <SelectContent>
@@ -128,11 +162,21 @@ export default function AdminCargosPage() {
                           <SelectItem value="CAIXA">CAIXA</SelectItem>
                           <SelectItem value="ESTOQUISTA">ESTOQUISTA</SelectItem>
                           <SelectItem value="SUPPORT">SUPPORT</SelectItem>
+                          <SelectItem value="IGOR">
+                            <span className="flex items-center gap-1.5">
+                              <Crown className="h-3.5 w-3.5 text-yellow-500" />
+                              IGOR 👑
+                            </span>
+                          </SelectItem>
                         </SelectContent>
                       </Select>
 
                       <Button
-                        className="mt-2 w-full rounded-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600"
+                        className={`mt-2 w-full rounded-full ${
+                          isIgorCargo && mudou
+                            ? "bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600"
+                            : "bg-gradient-to-r from-red-600 to-red-500 hover:from-red-700 hover:to-red-600"
+                        }`}
                         disabled={!mudou || salvando === u.id}
                         onClick={() => salvarCargo(u.id)}
                       >

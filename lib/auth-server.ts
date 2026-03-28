@@ -1,7 +1,7 @@
 // lib/auth-server.ts
 import { auth, clerkClient } from "@clerk/nextjs/server"
 
-export type Cargo = "ADMIN" | "CAIXA" | "ESTOQUISTA" | "SUPPORT"
+export type Cargo = "ADMIN" | "CAIXA" | "ESTOQUISTA" | "SUPPORT" | "IGOR"
 
 export async function getCargoUsuario(): Promise<Cargo | null> {
   const { userId } = await auth()
@@ -14,13 +14,17 @@ export async function getCargoUsuario(): Promise<Cargo | null> {
 }
 
 export function podeVender(cargo: Cargo | null) {
-  return cargo === "ADMIN" || cargo === "CAIXA"
+  return cargo === "ADMIN" || cargo === "CAIXA" || cargo === "IGOR"
 }
 
 export function podeGerenciarEstoque(cargo: Cargo | null) {
-  return cargo === "ADMIN" || cargo === "ESTOQUISTA"
+  return cargo === "ADMIN" || cargo === "ESTOQUISTA" || cargo === "IGOR"
 }
 
 export function isAdmin(cargo: Cargo | null) {
-  return cargo === "ADMIN"
+  return cargo === "ADMIN" || cargo === "IGOR"
+}
+
+export function isIgor(cargo: Cargo | null) {
+  return cargo === "IGOR"
 }

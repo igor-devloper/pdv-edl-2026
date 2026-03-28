@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { ShieldAlert } from "lucide-react"
 
 // ─── AdminGuard ───────────────────────────────────────────────────────────────
-// Protege rotas que exigem cargo ADMIN.
+// Protege rotas que exigem cargo ADMIN (ou IGOR, que também é admin).
 export function AdminGuard({ children }: { children: React.ReactNode }) {
   const { user, isLoaded } = useUser()
 

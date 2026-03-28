@@ -6,11 +6,17 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 export const revalidate = 0
 
-type Cargo = "ADMIN" | "CAIXA" | "ESTOQUISTA" | "SUPPORT"
+type Cargo = "ADMIN" | "CAIXA" | "ESTOQUISTA" | "SUPPORT" | "IGOR"
 type Body = { role: Cargo }
 
 function isCargo(v: unknown): v is Cargo {
-  return v === "ADMIN" || v === "CAIXA" || v === "ESTOQUISTA" || v === "SUPPORT"
+  return (
+    v === "ADMIN" ||
+    v === "CAIXA" ||
+    v === "ESTOQUISTA" ||
+    v === "SUPPORT" ||
+    v === "IGOR"
+  )
 }
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ userId: string }> }) {

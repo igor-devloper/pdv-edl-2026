@@ -2,10 +2,10 @@
 
 import { cn } from "@/lib/utils"
 import { UserButton, useUser } from "@clerk/nextjs"
-import { ShoppingBag, LayoutDashboard, Package, Users, AlertTriangle, Menu, Receipt, PieChart, Layers, Gift } from "lucide-react"
+import { ShoppingBag, LayoutDashboard, Package, Users, AlertTriangle, Menu, Receipt, PieChart, Gift, Crown } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { getCargoFromUser, isAdminCargo } from "@/lib/cargo-client"
+import { getCargoFromUser, isAdminCargo, isIgorCargo } from "@/lib/cargo-client"
 import { useState } from "react"
 import Image from "next/image"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -18,6 +18,7 @@ export function Header() {
 
   const cargo = getCargoFromUser(user)
   const isAdmin = isAdminCargo(cargo)
+  const isIgor  = isIgorCargo(cargo)
   const semCargo = isLoaded && !!user && cargo === ""
   const logado = isLoaded && !!user
 
@@ -55,8 +56,8 @@ export function Header() {
         </Link>
       )}
 
-      {/* Links exclusivos ADMIN */}
-      {isAdmin && (
+      {/* Links exclusivos ADMIN (mas não IGOR — ele tem painel próprio) */}
+      {isAdmin && !isIgor && (
         <>
           <Link
             href="/admin"
@@ -86,7 +87,6 @@ export function Header() {
             <span>Estoque</span>
           </Link>
 
-          {/* ── NOVO: Combos ── */}
           <Link
             href="/admin/combos"
             onClick={() => setOpen(false)}
@@ -129,6 +129,23 @@ export function Header() {
             <span>Núcleos</span>
           </Link>
         </>
+      )}
+
+      {/* Painel Supremo — exclusivo IGOR */}
+      {isIgor && (
+        <Link
+          href="/igor"
+          onClick={() => setOpen(false)}
+          className={cn(
+            "flex items-center gap-2 rounded-full px-4 py-2.5 text-sm font-bold transition-all",
+            pathname.startsWith("/igor")
+              ? "bg-gradient-to-r from-yellow-500 to-amber-500 text-white shadow-md shadow-yellow-200"
+              : "text-yellow-600 hover:bg-yellow-50 hover:text-yellow-700"
+          )}
+        >
+          <Crown className="h-4 w-4" />
+          <span>Supremo</span>
+        </Link>
       )}
     </>
   )
