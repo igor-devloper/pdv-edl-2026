@@ -32,7 +32,17 @@ export async function GET(req: Request) {
           include: {
             product: { select: { id: true, name: true, costCents: true } },
             variant: { select: { label: true, priceCents: true } },
-            combo:   { select: { id: true, name: true, costCents: true } },
+            combo: {
+              select: {
+                id: true, name: true, costCents: true,
+                items: {
+                  include: {
+                    product: { select: { costCents: true } },
+                    variant: { select: { id: true } },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -44,20 +54,30 @@ export async function GET(req: Request) {
     const ticketMedio = quantidade ? total / quantidade : 0
 
     // ─── Custo e Lucro ──────────────────────────────────────────────────────
-    // Para cada item vendido, tentamos obter o custo unitário:
-    //   1. combo.costCents  (se for combo)
-    //   2. product.costCents (se for produto simples)
-    //   3. 0 se não tiver custo cadastrado
+    // Para produtos simples: product.costCents * item.qty
+    // Para combos: soma o costCents de cada ComboItem (product.costCents * comboItem.qty)
+    //              multiplicado pela quantidade de combos vendidos (item.qty)
+    //              Se o combo tiver costCents próprio cadastrado, usa ele como fallback
     let totalCustoCents = 0
     for (const sale of sales) {
       for (const item of sale.items) {
-        let unitCost = 0
-        if (item.combo)        unitCost = item.combo.costCents   ?? 0
-        else if (item.product) unitCost = item.product.costCents ?? 0
-        totalCustoCents += unitCost * item.qty
+        if (item.combo) {
+          // Tenta somar custo item a item dentro do combo
+          const comboItems = item.combo.items
+          if (comboItems.length > 0) {
+            const custoPorCombo = comboItems.reduce((sum, ci) => {
+              return sum + (ci.product?.costCents ?? 0) * ci.qty
+            }, 0)
+            totalCustoCents += custoPorCombo * item.qty
+          } else {
+            // Fallback: costCents do combo direto (caso não tenha itens carregados)
+            totalCustoCents += (item.combo.costCents ?? 0) * item.qty
+          }
+        } else if (item.product) {
+          totalCustoCents += (item.product.costCents ?? 0) * item.qty
+        }
       }
     }
-
     const totalCusto = totalCustoCents / 100
     const lucro      = total - totalCusto
     const margemPct  = total > 0 ? Math.round((lucro / total) * 100) : 0
