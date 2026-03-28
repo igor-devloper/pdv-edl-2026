@@ -33,12 +33,13 @@ type Venda = {
   sellerUserId: string; sellerName: string; itens: VendaItem[]
 }
 type Usuario = { id: string; nome: string; email: string | null; role: string | null }
-type ApiResp  = { total: number; take: number; skip: number; vendas: Venda[] }
+type ApiResp = { total: number; take: number; skip: number; vendas: Venda[] }
 type UsuariosResp = { users: Usuario[] }
 
 type DashResumo = {
   periodo: { from: string; to: string }
   vendas: { quantidade: number; total: number; ticketMedio: number }
+  lucro: { totalCusto: number; lucro: number; margemPct: number }
   pagamentos: Array<{ metodo: "PIX" | "CASH" | "CARD"; quantidade: number; total: number }>
   topProdutos: Array<{ productId: number; nome: string; quantidade: number; total: number }>
   topVendedores: Array<{ sellerUserId: string; sellerName: string; quantidade: number; total: number }>
@@ -65,14 +66,14 @@ const NUCLEOS = [
 type NucleoName = typeof NUCLEOS[number]
 
 const NUCLEO_COLORS: Record<string, { pill: string; bar: string; dot: string }> = {
-  "Núcleo da Mata":     { pill: "bg-green-100 text-green-800 border-green-200",    bar: "bg-gradient-to-r from-green-400 to-emerald-500",  dot: "bg-green-400"   },
-  "Núcleo Central":     { pill: "bg-blue-100 text-blue-800 border-blue-200",       bar: "bg-gradient-to-r from-blue-400 to-indigo-500",    dot: "bg-blue-400"    },
-  "Núcleo Sul":         { pill: "bg-orange-100 text-orange-800 border-orange-200", bar: "bg-gradient-to-r from-orange-400 to-amber-500",   dot: "bg-orange-400"  },
-  "Núcleo Norte":       { pill: "bg-cyan-100 text-cyan-800 border-cyan-200",       bar: "bg-gradient-to-r from-cyan-400 to-sky-500",       dot: "bg-cyan-400"    },
-  "Núcleo Triângulo":   { pill: "bg-violet-100 text-violet-800 border-violet-200", bar: "bg-gradient-to-r from-violet-400 to-purple-500",  dot: "bg-violet-400"  },
-  "Núcleo Vale do Aço": { pill: "bg-rose-100 text-rose-800 border-rose-200",       bar: "bg-gradient-to-r from-rose-400 to-red-500",       dot: "bg-rose-400"    },
-  "Núcleo Vertentes":   { pill: "bg-teal-100 text-teal-800 border-teal-200",       bar: "bg-gradient-to-r from-teal-400 to-cyan-500",      dot: "bg-teal-400"    },
-  "Outro / Externo":    { pill: "bg-gray-100 text-gray-700 border-gray-200",       bar: "bg-gradient-to-r from-gray-300 to-gray-400",      dot: "bg-gray-400"    },
+  "Núcleo da Mata": { pill: "bg-green-100 text-green-800 border-green-200", bar: "bg-gradient-to-r from-green-400 to-emerald-500", dot: "bg-green-400" },
+  "Núcleo Central": { pill: "bg-blue-100 text-blue-800 border-blue-200", bar: "bg-gradient-to-r from-blue-400 to-indigo-500", dot: "bg-blue-400" },
+  "Núcleo Sul": { pill: "bg-orange-100 text-orange-800 border-orange-200", bar: "bg-gradient-to-r from-orange-400 to-amber-500", dot: "bg-orange-400" },
+  "Núcleo Norte": { pill: "bg-cyan-100 text-cyan-800 border-cyan-200", bar: "bg-gradient-to-r from-cyan-400 to-sky-500", dot: "bg-cyan-400" },
+  "Núcleo Triângulo": { pill: "bg-violet-100 text-violet-800 border-violet-200", bar: "bg-gradient-to-r from-violet-400 to-purple-500", dot: "bg-violet-400" },
+  "Núcleo Vale do Aço": { pill: "bg-rose-100 text-rose-800 border-rose-200", bar: "bg-gradient-to-r from-rose-400 to-red-500", dot: "bg-rose-400" },
+  "Núcleo Vertentes": { pill: "bg-teal-100 text-teal-800 border-teal-200", bar: "bg-gradient-to-r from-teal-400 to-cyan-500", dot: "bg-teal-400" },
+  "Outro / Externo": { pill: "bg-gray-100 text-gray-700 border-gray-200", bar: "bg-gradient-to-r from-gray-300 to-gray-400", dot: "bg-gray-400" },
 }
 const FALLBACK_COLOR = { pill: "bg-red-100 text-red-700 border-red-200", bar: "bg-gradient-to-r from-red-400 to-pink-500", dot: "bg-red-400" }
 function getNucleoColor(name: string) { return NUCLEO_COLORS[name] ?? FALLBACK_COLOR }
@@ -90,9 +91,9 @@ function fmtDateShort(iso: string) {
   return new Date(iso + "T12:00:00").toLocaleDateString("pt-BR")
 }
 function paymentInfo(p: "PIX" | "CASH" | "CARD") {
-  if (p === "PIX")  return { label: "PIX",      Icon: QrCode,    color: "bg-violet-100 text-violet-700 border-violet-200" }
-  if (p === "CASH") return { label: "Dinheiro", Icon: Banknote,  color: "bg-emerald-100 text-emerald-700 border-emerald-200" }
-  return                   { label: "Cartão",   Icon: CreditCard, color: "bg-blue-100 text-blue-700 border-blue-200" }
+  if (p === "PIX") return { label: "PIX", Icon: QrCode, color: "bg-violet-100 text-violet-700 border-violet-200" }
+  if (p === "CASH") return { label: "Dinheiro", Icon: Banknote, color: "bg-emerald-100 text-emerald-700 border-emerald-200" }
+  return { label: "Cartão", Icon: CreditCard, color: "bg-blue-100 text-blue-700 border-blue-200" }
 }
 
 // Sentinel para SelectItem que não pode ter value=""
@@ -117,15 +118,15 @@ const filtersDefault: Filters = {
 function buildVendasQuery(f: Filters, skip: number) {
   const p = new URLSearchParams()
   p.set("take", String(TAKE)); p.set("skip", String(skip))
-  if (f.search)       p.set("search",      f.search)
-  if (f.status)       p.set("status",      f.status)
-  if (f.payment)      p.set("payment",     f.payment)
+  if (f.search) p.set("search", f.search)
+  if (f.status) p.set("status", f.status)
+  if (f.payment) p.set("payment", f.payment)
   if (f.sellerUserId) p.set("sellerUserId", f.sellerUserId)
-  if (f.nucleo)       p.set("nucleo",      f.nucleo)
-  if (f.minCents)     p.set("minCents",    String(Number(f.minCents) * 100))
-  if (f.maxCents)     p.set("maxCents",    String(Number(f.maxCents) * 100))
-  if (f.dateFrom)     p.set("dateFrom",    new Date(f.dateFrom + "T00:00:00").toISOString())
-  if (f.dateTo)       p.set("dateTo",      new Date(f.dateTo   + "T23:59:59").toISOString())
+  if (f.nucleo) p.set("nucleo", f.nucleo)
+  if (f.minCents) p.set("minCents", String(Number(f.minCents) * 100))
+  if (f.maxCents) p.set("maxCents", String(Number(f.maxCents) * 100))
+  if (f.dateFrom) p.set("dateFrom", new Date(f.dateFrom + "T00:00:00").toISOString())
+  if (f.dateTo) p.set("dateTo", new Date(f.dateTo + "T23:59:59").toISOString())
   return `/api/igor/vendas?${p.toString()}`
 }
 
@@ -134,25 +135,25 @@ function buildVendasQuery(f: Filters, skip: number) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function TabMetricas() {
   const [sellerUserId, setSellerUserId] = useState("")
-  const [productId,    setProductId]    = useState("")
-  const [minValue,     setMinValue]     = useState("")
-  const [maxValue,     setMaxValue]     = useState("")
+  const [productId, setProductId] = useState("")
+  const [minValue, setMinValue] = useState("")
+  const [maxValue, setMaxValue] = useState("")
 
   const query = new URLSearchParams({
     ...(sellerUserId && { sellerUserId }),
-    ...(productId    && { productId }),
-    ...(minValue     && { minValue }),
-    ...(maxValue     && { maxValue }),
+    ...(productId && { productId }),
+    ...(minValue && { minValue }),
+    ...(maxValue && { maxValue }),
   }).toString()
 
-  const { data: usersData }    = useSWR<UsuariosResp>("/api/igor/usuarios", fetcher)
+  const { data: usersData } = useSWR<UsuariosResp>("/api/igor/usuarios", fetcher)
   const { data: productsData } = useSWR<{ produtos: Product[] }>("/api/products", fetcher)
   const { data, error, mutate } = useSWR<DashResumo>(
     `/api/dashboard/resumo?${query}`, fetcher, { refreshInterval: 15000 }
   )
 
   const { data: vendasData } = useSWR<ApiResp>(
-    `/api/igor/vendas?take=20${sellerUserId ? `&sellerUserId=${sellerUserId}` : ""}${productId ? `&productId=${productId}` : ""}${minValue ? `&minCents=${Number(minValue)*100}` : ""}${maxValue ? `&maxCents=${Number(maxValue)*100}` : ""}`,
+    `/api/igor/vendas?take=20${sellerUserId ? `&sellerUserId=${sellerUserId}` : ""}${productId ? `&productId=${productId}` : ""}${minValue ? `&minCents=${Number(minValue) * 100}` : ""}${maxValue ? `&maxCents=${Number(maxValue) * 100}` : ""}`,
     fetcher, { refreshInterval: 15000 }
   )
 
@@ -219,7 +220,7 @@ function TabMetricas() {
       {/* KPIs */}
       {!data && !error ? (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
+          {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="h-24 animate-pulse rounded-2xl bg-gradient-to-br from-yellow-100 to-amber-100" />
           ))}
         </div>
@@ -227,11 +228,12 @@ function TabMetricas() {
         <Card className="rounded-2xl p-4 text-red-600 text-sm">Erro ao carregar métricas</Card>
       ) : (
         <>
+          {/* Linha 1 — Vendas */}
           <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
             {[
-              { label: "Total vendido",  value: brl(data!.vendas.total),         Icon: DollarSign  },
-              { label: "Nº de vendas",   value: String(data!.vendas.quantidade),  Icon: ShoppingBag },
-              { label: "Ticket médio",   value: brl(data!.vendas.ticketMedio),   Icon: TrendingUp  },
+              { label: "Total vendido", value: brl(data!.vendas.total), Icon: DollarSign },
+              { label: "Nº de vendas", value: String(data!.vendas.quantidade), Icon: ShoppingBag },
+              { label: "Ticket médio", value: brl(data!.vendas.ticketMedio), Icon: TrendingUp },
             ].map(({ label, value, Icon }) => (
               <Card key={label} className="rounded-2xl border-yellow-200 bg-gradient-to-br from-yellow-50 to-amber-50 p-5 shadow-sm">
                 <div className="flex items-center gap-2 mb-2">
@@ -246,7 +248,54 @@ function TabMetricas() {
             ))}
           </div>
 
-          {/* Pagamentos + Top Produtos */}
+          {/* Linha 2 — Financeiro */}
+          {data!.lucro && (
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <Card className="rounded-2xl border-emerald-200 bg-gradient-to-br from-emerald-50 to-green-50 p-5 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-green-500">
+                    <TrendingUp className="h-4 w-4 text-white" />
+                  </div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Lucro bruto</p>
+                </div>
+                <p className={`text-2xl sm:text-3xl font-black tabular-nums ${data!.lucro.lucro >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                  {brl(data!.lucro.lucro)}
+                </p>
+                <p className="text-xs text-emerald-600 mt-1">margem de {data!.lucro.margemPct}%</p>
+              </Card>
+
+              <Card className="rounded-2xl border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-blue-400 to-indigo-500">
+                    <DollarSign className="h-4 w-4 text-white" />
+                  </div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-blue-800">Custo total</p>
+                </div>
+                <p className="text-2xl sm:text-3xl font-black text-blue-700 tabular-nums">
+                  {brl(data!.lucro.totalCusto)}
+                </p>
+                <p className="text-xs text-blue-500 mt-1">Baseado no custo cadastrado dos produtos</p>
+              </Card>
+
+              <Card className="rounded-2xl border-purple-200 bg-gradient-to-br from-purple-50 to-violet-50 p-5 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-purple-400 to-violet-500">
+                    <Trophy className="h-4 w-4 text-white" />
+                  </div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-purple-800">Margem</p>
+                </div>
+                <p className={`text-2xl sm:text-3xl font-black tabular-nums ${data!.lucro.margemPct >= 0 ? "text-purple-700" : "text-red-600"}`}>
+                  {data!.lucro.margemPct}%
+                </p>
+                <div className="mt-2 h-2 w-full rounded-full bg-purple-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-purple-400 to-violet-500 transition-all duration-700"
+                    style={{ width: `${Math.min(100, Math.max(0, data!.lucro.margemPct))}%` }}
+                  />
+                </div>
+              </Card>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             <Card className="rounded-2xl border-yellow-100 p-5 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
@@ -272,15 +321,20 @@ function TabMetricas() {
             </Card>
 
             <Card className="rounded-2xl border-yellow-100 p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-yellow-600" />
-                <p className="font-bold text-gray-900">Top Produtos</p>
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-yellow-600" />
+                  <p className="font-bold text-gray-900">Todos os Produtos</p>
+                </div>
+                <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-bold text-yellow-700">
+                  {data!.topProdutos.length}
+                </span>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
                 {data!.topProdutos.map((t, i) => (
                   <div key={t.productId} className="flex items-center justify-between rounded-xl bg-gradient-to-br from-yellow-50 to-amber-50 px-3 py-2.5">
                     <div className="min-w-0 flex items-center gap-2">
-                      <span className="text-lg font-black text-yellow-600 w-6">{TROPHY_EMOJIS[i] ?? `${i+1}º`}</span>
+                      <span className="text-lg font-black text-yellow-600 w-6">{TROPHY_EMOJIS[i] ?? `${i + 1}º`}</span>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold text-gray-900">{t.nome}</p>
                         <p className="text-xs text-gray-500">{t.quantidade} vendidos</p>
@@ -305,7 +359,7 @@ function TabMetricas() {
                 {data!.topVendedores.map((v, i) => (
                   <div key={v.sellerUserId} className="flex items-center justify-between rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 px-3 py-3">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xl font-black text-amber-600 w-7 shrink-0">{TROPHY_EMOJIS[i] ?? `${i+1}º`}</span>
+                      <span className="text-xl font-black text-amber-600 w-7 shrink-0">{TROPHY_EMOJIS[i] ?? `${i + 1}º`}</span>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-bold text-gray-900">{v.sellerName}</p>
                         <p className="text-xs text-gray-500">{v.quantidade} vendas</p>
@@ -364,18 +418,18 @@ function TabMetricas() {
 // ABA NÚCLEOS
 // ═══════════════════════════════════════════════════════════════════════════════
 function TabNucleos() {
-  const today        = new Date().toISOString().slice(0, 10)
+  const today = new Date().toISOString().slice(0, 10)
   const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10)
 
-  const [from, setFrom]               = useState(firstOfMonth)
-  const [to,   setTo]                 = useState(today)
+  const [from, setFrom] = useState(firstOfMonth)
+  const [to, setTo] = useState(today)
   const [filtroAtivo, setFiltroAtivo] = useState({ from: firstOfMonth, to: today })
   const [selecionados, setSelecionados] = useState<Set<NucleoName>>(new Set())
 
   const url = `/api/admin/nucleos${(() => {
     const p = new URLSearchParams()
     if (filtroAtivo.from) p.set("from", filtroAtivo.from)
-    if (filtroAtivo.to)   p.set("to",   filtroAtivo.to)
+    if (filtroAtivo.to) p.set("to", filtroAtivo.to)
     const qs = p.toString()
     return qs ? `?${qs}` : ""
   })()}`
@@ -389,7 +443,7 @@ function TabNucleos() {
   }, [todosNucleos, selecionados])
 
   const totaisFiltrados = useMemo(() => ({
-    totalCents:  nucleosFiltrados.reduce((s, n) => s + n.totalCents,  0),
+    totalCents: nucleosFiltrados.reduce((s, n) => s + n.totalCents, 0),
     totalVendas: nucleosFiltrados.reduce((s, n) => s + n.totalVendas, 0),
   }), [nucleosFiltrados])
 
@@ -460,8 +514,8 @@ function TabNucleos() {
         </div>
         <div className="flex flex-wrap gap-2">
           {NUCLEOS.map((n) => {
-            const color    = getNucleoColor(n)
-            const ativo    = selecionados.has(n)
+            const color = getNucleoColor(n)
+            const ativo = selecionados.has(n)
             const temDados = todosNucleos.some((nd) => nd.nucleo === n)
             return (
               <button key={n} type="button" onClick={() => toggleNucleo(n)}
@@ -469,7 +523,7 @@ function TabNucleos() {
                 className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all active:scale-95
                   ${ativo ? `${color.pill} border-current shadow-sm scale-[1.03]`
                     : temDados ? "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:bg-gray-50"
-                    : "border-gray-100 bg-gray-50 text-gray-300 opacity-60 cursor-default"}`}>
+                      : "border-gray-100 bg-gray-50 text-gray-300 opacity-60 cursor-default"}`}>
                 <span className={`h-2 w-2 rounded-full shrink-0 ${ativo ? color.dot : "bg-gray-300"}`} />
                 {n}
                 {temDados && !ativo && (
@@ -487,9 +541,9 @@ function TabNucleos() {
       {/* Totais */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {[
-          { Icon: DollarSign,  label: "Faturamento", value: brlCents(totaisFiltrados.totalCents) },
-          { Icon: ShoppingBag, label: "Vendas",       value: String(totaisFiltrados.totalVendas) },
-          { Icon: Building2,   label: "Núcleos",      value: String(nucleosFiltrados.length) },
+          { Icon: DollarSign, label: "Faturamento", value: brlCents(totaisFiltrados.totalCents) },
+          { Icon: ShoppingBag, label: "Vendas", value: String(totaisFiltrados.totalVendas) },
+          { Icon: Building2, label: "Núcleos", value: String(nucleosFiltrados.length) },
         ].map(({ Icon, label, value }) => (
           <Card key={label} className="rounded-2xl border-yellow-100 p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-2">
@@ -519,7 +573,7 @@ function TabNucleos() {
       ) : (
         <div className="space-y-3">
           {nucleosFiltrados.map((n, idx) => {
-            const color  = getNucleoColor(n.nucleo)
+            const color = getNucleoColor(n.nucleo)
             const barPct = Math.round((n.totalCents / maxCents) * 100)
             const isTop3 = idx < 3
             return (
@@ -527,13 +581,12 @@ function TabNucleos() {
                 <div className="p-4 sm:p-5">
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl shadow-sm ${
-                        isTop3
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl shadow-sm ${isTop3
                           ? ["bg-gradient-to-br from-yellow-300 to-amber-400", "bg-gradient-to-br from-gray-200 to-gray-300", "bg-gradient-to-br from-orange-300 to-amber-400"][idx]
                           : "bg-gradient-to-br from-yellow-50 to-amber-50"
-                      }`}>
+                        }`}>
                         {isTop3 ? <span className="text-lg">{TROPHY_EMOJIS[idx]}</span>
-                                : <span className="text-sm font-black text-gray-500">{idx + 1}º</span>}
+                          : <span className="text-sm font-black text-gray-500">{idx + 1}º</span>}
                       </div>
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -601,7 +654,7 @@ function VendaCard({ venda, onEdit, onCancel }: { venda: Venda; onEdit: (v: Vend
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
           <span className="flex items-center gap-1"><User className="h-3.5 w-3.5 text-yellow-600" /><b>{venda.sellerName}</b></span>
           {venda.buyerName && <span className="flex items-center gap-1"><ShoppingCart className="h-3.5 w-3.5" />{venda.buyerName}</span>}
-          {venda.nucleo    && <span className="flex items-center gap-1"><Package className="h-3.5 w-3.5 text-purple-500" />{venda.nucleo}</span>}
+          {venda.nucleo && <span className="flex items-center gap-1"><Package className="h-3.5 w-3.5 text-purple-500" />{venda.nucleo}</span>}
           <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{fmtDate(venda.createdAt)}</span>
           {venda.descontoVendaCents != null && venda.descontoVendaCents > 0 && (
             <span className="flex items-center gap-1 text-purple-600"><TrendingUp className="h-3.5 w-3.5" />Desconto: {brlCents(venda.descontoVendaCents)}</span>
@@ -638,13 +691,13 @@ function VendaCard({ venda, onEdit, onCancel }: { venda: Venda; onEdit: (v: Vend
 // MODAL DE EDIÇÃO
 // ═══════════════════════════════════════════════════════════════════════════════
 function EditModal({ venda, onClose, onSaved }: { venda: Venda; onClose: () => void; onSaved: () => void }) {
-  const [salvando,    setSalvando]    = useState(false)
-  const [buyerName,   setBuyerName]   = useState(venda.buyerName ?? "")
-  const [nucleo,      setNucleo]      = useState(venda.nucleo ?? "")
-  const [payment,     setPayment]     = useState<"PIX" | "CASH" | "CARD">(venda.payment)
-  const [status,      setStatus]      = useState<"PAID" | "CANCELED">(venda.status)
-  const [totalReais,  setTotalReais]  = useState(String((venda.totalCents / 100).toFixed(2)))
-  const [desconto,    setDesconto]    = useState(venda.descontoVendaCents != null ? String((venda.descontoVendaCents / 100).toFixed(2)) : "")
+  const [salvando, setSalvando] = useState(false)
+  const [buyerName, setBuyerName] = useState(venda.buyerName ?? "")
+  const [nucleo, setNucleo] = useState(venda.nucleo ?? "")
+  const [payment, setPayment] = useState<"PIX" | "CASH" | "CARD">(venda.payment)
+  const [status, setStatus] = useState<"PAID" | "CANCELED">(venda.status)
+  const [totalReais, setTotalReais] = useState(String((venda.totalCents / 100).toFixed(2)))
+  const [desconto, setDesconto] = useState(venda.descontoVendaCents != null ? String((venda.descontoVendaCents / 100).toFixed(2)) : "")
   const [itens, setItens] = useState(venda.itens.map((it) => ({
     ...it, qtyStr: String(it.qty), unitReais: String((it.unitCents / 100).toFixed(2)),
   })))
@@ -804,11 +857,11 @@ function CancelModal({ venda, onClose, onCanceled }: { venda: Venda; onClose: ()
 // ABA VENDAS
 // ═══════════════════════════════════════════════════════════════════════════════
 function TabVendas() {
-  const [filters,  setFilters]  = useState<Filters>(filtersDefault)
-  const [applied,  setApplied]  = useState<Filters>(filtersDefault)
-  const [skip,     setSkip]     = useState(0)
+  const [filters, setFilters] = useState<Filters>(filtersDefault)
+  const [applied, setApplied] = useState<Filters>(filtersDefault)
+  const [skip, setSkip] = useState(0)
   const [showFilters, setShowFilters] = useState(false)
-  const [editVenda,   setEditVenda]   = useState<Venda | null>(null)
+  const [editVenda, setEditVenda] = useState<Venda | null>(null)
   const [cancelVenda, setCancelVenda] = useState<Venda | null>(null)
 
   const queryUrl = buildVendasQuery(applied, skip)
@@ -816,15 +869,15 @@ function TabVendas() {
   const { data: usersData } = useSWR<UsuariosResp>("/api/igor/usuarios", fetcher)
 
   const vendas = data?.vendas ?? []
-  const total  = data?.total  ?? 0
-  const users  = usersData?.users ?? []
+  const total = data?.total ?? 0
+  const users = usersData?.users ?? []
   const temFiltros = Object.values(applied).some((v) => v !== "")
 
-  const pagas      = vendas.filter((v) => v.status === "PAID")
+  const pagas = vendas.filter((v) => v.status === "PAID")
   const canceladas = vendas.filter((v) => v.status === "CANCELED")
-  const totalPago  = pagas.reduce((a, v) => a + v.totalCents, 0)
+  const totalPago = pagas.reduce((a, v) => a + v.totalCents, 0)
 
-  const handleSaved    = useCallback(() => mutate(), [mutate])
+  const handleSaved = useCallback(() => mutate(), [mutate])
   const handleCanceled = useCallback(() => mutate(), [mutate])
 
   return (
@@ -832,10 +885,10 @@ function TabVendas() {
       {/* Mini stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Total visível", value: String(vendas.length), sub: "vendas",           color: "from-yellow-50 to-amber-50 border-yellow-200 text-yellow-900" },
-          { label: "Pagas",         value: String(pagas.length),  sub: brlCents(totalPago), color: "from-emerald-50 to-green-50 border-emerald-200 text-emerald-900" },
-          { label: "Canceladas",    value: String(canceladas.length), sub: "nesta página", color: "from-red-50 to-rose-50 border-red-200 text-red-900" },
-          { label: "Total (DB)",    value: String(total),         sub: "no filtro",         color: "from-purple-50 to-violet-50 border-purple-200 text-purple-900" },
+          { label: "Total visível", value: String(vendas.length), sub: "vendas", color: "from-yellow-50 to-amber-50 border-yellow-200 text-yellow-900" },
+          { label: "Pagas", value: String(pagas.length), sub: brlCents(totalPago), color: "from-emerald-50 to-green-50 border-emerald-200 text-emerald-900" },
+          { label: "Canceladas", value: String(canceladas.length), sub: "nesta página", color: "from-red-50 to-rose-50 border-red-200 text-red-900" },
+          { label: "Total (DB)", value: String(total), sub: "no filtro", color: "from-purple-50 to-violet-50 border-purple-200 text-purple-900" },
         ].map(({ label, value, sub, color }) => (
           <Card key={label} className={`p-4 border bg-gradient-to-br ${color}`}>
             <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{label}</p>
@@ -977,7 +1030,7 @@ function TabVendas() {
       )}
 
       {/* Modais */}
-      {editVenda   && <EditModal   venda={editVenda}   onClose={() => setEditVenda(null)}   onSaved={handleSaved} />}
+      {editVenda && <EditModal venda={editVenda} onClose={() => setEditVenda(null)} onSaved={handleSaved} />}
       {cancelVenda && <CancelModal venda={cancelVenda} onClose={() => setCancelVenda(null)} onCanceled={handleCanceled} />}
     </div>
   )
@@ -987,9 +1040,9 @@ function TabVendas() {
 // PAINEL PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════════
 const TABS: { id: Tab; label: string; Icon: React.ElementType }[] = [
-  { id: "metricas", label: "Métricas",  Icon: LayoutDashboard },
-  { id: "nucleos",  label: "Núcleos",   Icon: Building2 },
-  { id: "vendas",   label: "Vendas",    Icon: Layers },
+  { id: "metricas", label: "Métricas", Icon: LayoutDashboard },
+  { id: "nucleos", label: "Núcleos", Icon: Building2 },
+  { id: "vendas", label: "Vendas", Icon: Layers },
 ]
 
 function IgorPainelContent() {
@@ -1028,8 +1081,8 @@ function IgorPainelContent() {
 
         {/* Conteúdo da aba */}
         {tab === "metricas" && <TabMetricas />}
-        {tab === "nucleos"  && <TabNucleos />}
-        {tab === "vendas"   && <TabVendas />}
+        {tab === "nucleos" && <TabNucleos />}
+        {tab === "vendas" && <TabVendas />}
       </main>
     </div>
   )
