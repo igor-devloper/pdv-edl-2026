@@ -95,32 +95,37 @@ function paymentInfo(p: "PIX" | "CASH" | "CARD") {
   return                   { label: "Cartão",   Icon: CreditCard, color: "bg-blue-100 text-blue-700 border-blue-200" }
 }
 
+// Sentinel para SelectItem que não pode ter value=""
+const NONE = "_todos_"
+function toSelect(v: string) { return v || NONE }
+function fromSelect(v: string) { return v === NONE ? "" : v }
+
 // ─── Abas ─────────────────────────────────────────────────────────────────────
 type Tab = "metricas" | "nucleos" | "vendas"
 
 // ─── Filtros de vendas ────────────────────────────────────────────────────────
 type Filters = {
-  search: string; status: "ALL" | "PAID" | "CANCELED"
-  payment: "ALL" | "PIX" | "CASH" | "CARD"; sellerUserId: string
+  search: string; status: "" | "PAID" | "CANCELED"
+  payment: "" | "PIX" | "CASH" | "CARD"; sellerUserId: string
   nucleo: string; minCents: string; maxCents: string
   dateFrom: string; dateTo: string
 }
 const filtersDefault: Filters = {
-  search: "", status: "ALL", payment: "ALL", sellerUserId: "ALL",
-  nucleo: "ALL", minCents: "", maxCents: "", dateFrom: "", dateTo: "",
+  search: "", status: "", payment: "", sellerUserId: "",
+  nucleo: "", minCents: "", maxCents: "", dateFrom: "", dateTo: "",
 }
 function buildVendasQuery(f: Filters, skip: number) {
   const p = new URLSearchParams()
   p.set("take", String(TAKE)); p.set("skip", String(skip))
-  if (f.search)      p.set("search",       f.search)
-  if (f.status !== "ALL")  p.set("status", f.status)
-  if (f.payment !== "ALL") p.set("payment", f.payment)
-  if (f.sellerUserId !== "ALL") p.set("sellerUserId", f.sellerUserId)
-  if (f.nucleo !== "ALL")  p.set("nucleo",  f.nucleo)
-  if (f.minCents)    p.set("minCents",  String(Number(f.minCents) * 100))
-  if (f.maxCents)    p.set("maxCents",  String(Number(f.maxCents) * 100))
-  if (f.dateFrom)    p.set("dateFrom",  new Date(f.dateFrom + "T00:00:00").toISOString())
-  if (f.dateTo)      p.set("dateTo",    new Date(f.dateTo   + "T23:59:59").toISOString())
+  if (f.search)       p.set("search",      f.search)
+  if (f.status)       p.set("status",      f.status)
+  if (f.payment)      p.set("payment",     f.payment)
+  if (f.sellerUserId) p.set("sellerUserId", f.sellerUserId)
+  if (f.nucleo)       p.set("nucleo",      f.nucleo)
+  if (f.minCents)     p.set("minCents",    String(Number(f.minCents) * 100))
+  if (f.maxCents)     p.set("maxCents",    String(Number(f.maxCents) * 100))
+  if (f.dateFrom)     p.set("dateFrom",    new Date(f.dateFrom + "T00:00:00").toISOString())
+  if (f.dateTo)       p.set("dateTo",      new Date(f.dateTo   + "T23:59:59").toISOString())
   return `/api/igor/vendas?${p.toString()}`
 }
 
@@ -128,8 +133,8 @@ function buildVendasQuery(f: Filters, skip: number) {
 // ABA MÉTRICAS
 // ═══════════════════════════════════════════════════════════════════════════════
 function TabMetricas() {
-  const [sellerUserId, setSellerUserId] = useState("ALL")
-  const [productId,    setProductId]    = useState("ALL")
+  const [sellerUserId, setSellerUserId] = useState("")
+  const [productId,    setProductId]    = useState("")
   const [minValue,     setMinValue]     = useState("")
   const [maxValue,     setMaxValue]     = useState("")
 
@@ -147,7 +152,7 @@ function TabMetricas() {
   )
 
   const { data: vendasData } = useSWR<ApiResp>(
-    `/api/igor/vendas?take=20${(sellerUserId !== "ALL" && { sellerUserId }) ? `&sellerUserId=${sellerUserId}` : ""}${productId ? `&productId=${productId}` : ""}${minValue ? `&minCents=${Number(minValue)*100}` : ""}${maxValue ? `&maxCents=${Number(maxValue)*100}` : ""}`,
+    `/api/igor/vendas?take=20${sellerUserId ? `&sellerUserId=${sellerUserId}` : ""}${productId ? `&productId=${productId}` : ""}${minValue ? `&minCents=${Number(minValue)*100}` : ""}${maxValue ? `&maxCents=${Number(maxValue)*100}` : ""}`,
     fetcher, { refreshInterval: 15000 }
   )
 
@@ -158,12 +163,12 @@ function TabMetricas() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs font-bold text-yellow-800 uppercase tracking-wide">Vendedor</Label>
-            <Select value={sellerUserId} onValueChange={setSellerUserId}>
+            <Select value={toSelect(sellerUserId)} onValueChange={(v) => setSellerUserId(fromSelect(v))}>
               <SelectTrigger className="border-yellow-200 bg-white">
                 <SelectValue placeholder="Todos os vendedores" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Todos os vendedores</SelectItem>
+                <SelectItem value={NONE}>Todos os vendedores</SelectItem>
                 {usersData?.users.map((u) => (
                   <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>
                 ))}
@@ -172,12 +177,12 @@ function TabMetricas() {
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-bold text-yellow-800 uppercase tracking-wide">Produto</Label>
-            <Select value={productId} onValueChange={setProductId}>
+            <Select value={toSelect(productId)} onValueChange={(v) => setProductId(fromSelect(v))}>
               <SelectTrigger className="border-yellow-200 bg-white">
                 <SelectValue placeholder="Todos os produtos" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Todos os produtos</SelectItem>
+                <SelectItem value={NONE}>Todos os produtos</SelectItem>
                 {productsData?.produtos?.map((p) => (
                   <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>
                 ))}
@@ -691,10 +696,10 @@ function EditModal({ venda, onClose, onSaved }: { venda: Venda; onClose: () => v
             <div className="space-y-1.5"><Label>Nome do Comprador</Label>
               <Input value={buyerName} onChange={(e) => setBuyerName(e.target.value)} placeholder="Nome do comprador" /></div>
             <div className="space-y-1.5"><Label>Núcleo</Label>
-              <Select value={nucleo || "__vazio"} onValueChange={(v) => setNucleo(v === "__vazio" ? "" : v)}>
+              <Select value={toSelect(nucleo)} onValueChange={(v) => setNucleo(fromSelect(v))}>
                 <SelectTrigger><SelectValue placeholder="Selecione o núcleo" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__vazio">— Não informado —</SelectItem>
+                  <SelectItem value={NONE}>— Não informado —</SelectItem>
                   {NUCLEOS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
                 </SelectContent>
               </Select></div>
@@ -813,9 +818,9 @@ function TabVendas() {
   const vendas = data?.vendas ?? []
   const total  = data?.total  ?? 0
   const users  = usersData?.users ?? []
-  const temFiltros = Object.entries(applied).some(([, v]) => v && v !== "ALL" && v !== "")
+  const temFiltros = Object.values(applied).some((v) => v !== "")
 
-  const pagas     = vendas.filter((v) => v.status === "PAID")
+  const pagas      = vendas.filter((v) => v.status === "PAID")
   const canceladas = vendas.filter((v) => v.status === "CANCELED")
   const totalPago  = pagas.reduce((a, v) => a + v.totalCents, 0)
 
@@ -827,10 +832,10 @@ function TabVendas() {
       {/* Mini stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: "Total visível", value: String(vendas.length), sub: "vendas",      color: "from-yellow-50 to-amber-50 border-yellow-200 text-yellow-900" },
+          { label: "Total visível", value: String(vendas.length), sub: "vendas",           color: "from-yellow-50 to-amber-50 border-yellow-200 text-yellow-900" },
           { label: "Pagas",         value: String(pagas.length),  sub: brlCents(totalPago), color: "from-emerald-50 to-green-50 border-emerald-200 text-emerald-900" },
           { label: "Canceladas",    value: String(canceladas.length), sub: "nesta página", color: "from-red-50 to-rose-50 border-red-200 text-red-900" },
-          { label: "Total (DB)",    value: String(total),         sub: "no filtro",   color: "from-purple-50 to-violet-50 border-purple-200 text-purple-900" },
+          { label: "Total (DB)",    value: String(total),         sub: "no filtro",         color: "from-purple-50 to-violet-50 border-purple-200 text-purple-900" },
         ].map(({ label, value, sub, color }) => (
           <Card key={label} className={`p-4 border bg-gradient-to-br ${color}`}>
             <p className="text-xs font-semibold uppercase tracking-wide opacity-70">{label}</p>
@@ -869,35 +874,35 @@ function TabVendas() {
               </div>
             </div>
             {([
-              { label: "Status", field: "status", options: [["ALL","Todos"],["PAID","✅ Pagas"],["CANCELED","❌ Canceladas"]] },
-              { label: "Método", field: "payment", options: [["ALL","Todos"],["PIX","PIX"],["CASH","Dinheiro"],["CARD","Cartão"]] },
+              { label: "Status", field: "status", options: [["_todos_", "Todos"], ["PAID", "✅ Pagas"], ["CANCELED", "❌ Canceladas"]] },
+              { label: "Método", field: "payment", options: [["_todos_", "Todos"], ["PIX", "PIX"], ["CASH", "Dinheiro"], ["CARD", "Cartão"]] },
             ] as const).map(({ label, field, options }) => (
               <div key={field} className="space-y-1.5">
                 <Label className="text-xs font-semibold text-yellow-800">{label}</Label>
-                <Select value={filters[field]} onValueChange={(v) => setFilters((f) => ({ ...f, [field]: v as never }))}>
+                <Select value={toSelect(filters[field])} onValueChange={(v) => setFilters((f) => ({ ...f, [field]: fromSelect(v) as never }))}>
                   <SelectTrigger className="border-yellow-200"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {options.map(([val, lbl]) => <SelectItem key={val} value={val}>{lbl}</SelectItem>)}
+                    {options.map(([val, lbl]) => <SelectItem key={lbl} value={val}>{lbl}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
             ))}
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold text-yellow-800">Vendedor</Label>
-              <Select value={filters.sellerUserId} onValueChange={(v) => setFilters((f) => ({ ...f, sellerUserId: v }))}>
+              <Select value={toSelect(filters.sellerUserId)} onValueChange={(v) => setFilters((f) => ({ ...f, sellerUserId: fromSelect(v) }))}>
                 <SelectTrigger className="border-yellow-200"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Todos</SelectItem>
+                  <SelectItem value={NONE}>Todos</SelectItem>
                   {users.map((u) => <SelectItem key={u.id} value={u.id}>{u.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold text-yellow-800">Núcleo</Label>
-              <Select value={filters.nucleo} onValueChange={(v) => setFilters((f) => ({ ...f, nucleo: v }))}>
+              <Select value={toSelect(filters.nucleo)} onValueChange={(v) => setFilters((f) => ({ ...f, nucleo: fromSelect(v) }))}>
                 <SelectTrigger className="border-yellow-200"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Todos</SelectItem>
+                  <SelectItem value={NONE}>Todos</SelectItem>
                   {NUCLEOS.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
                 </SelectContent>
               </Select>
