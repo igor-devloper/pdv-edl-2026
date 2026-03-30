@@ -138,12 +138,19 @@ function TabMetricas() {
   const [productId, setProductId] = useState("")
   const [minValue, setMinValue] = useState("")
   const [maxValue, setMaxValue] = useState("")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
 
+  // ── query para /api/dashboard/resumo ──────────────────────────────────────
+  // minValue/maxValue são enviados em reais — a API converte para cents internamente
+  // dateFrom/dateTo como ISO string completa
   const query = new URLSearchParams({
     ...(sellerUserId && { sellerUserId }),
-    ...(productId && { productId }),
-    ...(minValue && { minValue }),
-    ...(maxValue && { maxValue }),
+    ...(productId    && { productId }),
+    ...(minValue     && { minValue }),
+    ...(maxValue     && { maxValue }),
+    ...(dateFrom     && { dateFrom: new Date(dateFrom + "T00:00:00").toISOString() }),
+    ...(dateTo       && { dateTo:   new Date(dateTo   + "T23:59:59").toISOString() }),
   }).toString()
 
   const { data: usersData } = useSWR<UsuariosResp>("/api/igor/usuarios", fetcher)
@@ -152,21 +159,34 @@ function TabMetricas() {
     `/api/dashboard/resumo?${query}`, fetcher, { refreshInterval: 15000 }
   )
 
+  // ── query para vendas recentes — mesmos filtros, converte valor para cents ──
+  const vendasQuery = new URLSearchParams({
+    take: "20",
+    ...(sellerUserId && { sellerUserId }),
+    ...(productId    && { productId }),
+    ...(minValue     && { minCents: String(Math.round(Number(minValue) * 100)) }),
+    ...(maxValue     && { maxCents: String(Math.round(Number(maxValue) * 100)) }),
+    ...(dateFrom     && { dateFrom: new Date(dateFrom + "T00:00:00").toISOString() }),
+    ...(dateTo       && { dateTo:   new Date(dateTo   + "T23:59:59").toISOString() }),
+  }).toString()
+
   const { data: vendasData } = useSWR<ApiResp>(
-    `/api/igor/vendas?take=20${sellerUserId ? `&sellerUserId=${sellerUserId}` : ""}${productId ? `&productId=${productId}` : ""}${minValue ? `&minCents=${Number(minValue) * 100}` : ""}${maxValue ? `&maxCents=${Number(maxValue) * 100}` : ""}`,
+    `/api/igor/vendas?${vendasQuery}`,
     fetcher, { refreshInterval: 15000 }
   )
+
+  const temFiltros = !!(sellerUserId || productId || minValue || maxValue || dateFrom || dateTo)
 
   return (
     <div className="space-y-5">
       {/* Filtros */}
       <Card className="rounded-2xl border-yellow-200 bg-yellow-50/50 p-4 sm:p-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs font-bold text-yellow-800 uppercase tracking-wide">Vendedor</Label>
             <Select value={toSelect(sellerUserId)} onValueChange={(v) => setSellerUserId(fromSelect(v))}>
               <SelectTrigger className="border-yellow-200 bg-white">
-                <SelectValue placeholder="Todos os vendedores" />
+                <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NONE}>Todos os vendedores</SelectItem>
@@ -180,7 +200,7 @@ function TabMetricas() {
             <Label className="text-xs font-bold text-yellow-800 uppercase tracking-wide">Produto</Label>
             <Select value={toSelect(productId)} onValueChange={(v) => setProductId(fromSelect(v))}>
               <SelectTrigger className="border-yellow-200 bg-white">
-                <SelectValue placeholder="Todos os produtos" />
+                <SelectValue placeholder="Todos" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={NONE}>Todos os produtos</SelectItem>
@@ -206,11 +226,37 @@ function TabMetricas() {
               className="border-yellow-200 bg-white"
             />
           </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold text-yellow-800 uppercase tracking-wide flex items-center gap-1">
+              <Calendar className="h-3 w-3" /> Data de
+            </Label>
+            <Input
+              type="date" value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="border-yellow-200 bg-white"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-bold text-yellow-800 uppercase tracking-wide flex items-center gap-1">
+              <Calendar className="h-3 w-3" /> Data até
+            </Label>
+            <Input
+              type="date" value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="border-yellow-200 bg-white"
+            />
+          </div>
         </div>
-        {(sellerUserId || productId || minValue || maxValue) && (
+        {temFiltros && (
           <div className="mt-3 pt-3 border-t border-yellow-200">
-            <button onClick={() => { setSellerUserId(""); setProductId(""); setMinValue(""); setMaxValue("") }}
-              className="text-xs font-semibold text-yellow-700 hover:text-yellow-900 flex items-center gap-1">
+            <button
+              onClick={() => {
+                setSellerUserId(""); setProductId("")
+                setMinValue(""); setMaxValue("")
+                setDateFrom(""); setDateTo("")
+              }}
+              className="text-xs font-semibold text-yellow-700 hover:text-yellow-900 flex items-center gap-1"
+            >
               <X className="h-3.5 w-3.5" /> Limpar filtros
             </button>
           </div>
@@ -243,7 +289,11 @@ function TabMetricas() {
                   <p className="text-xs font-bold uppercase tracking-wide text-yellow-800">{label}</p>
                 </div>
                 <p className="text-2xl sm:text-3xl font-black text-gray-900 tabular-nums">{value}</p>
-                {data?.periodo && <p className="text-xs text-yellow-600 mt-1">📅 {data.periodo.from} a {data.periodo.to}</p>}
+                {data?.periodo && (
+                  <p className="text-xs text-yellow-600 mt-1">
+                    📅 {data.periodo.from} a {data.periodo.to}
+                  </p>
+                )}
               </Card>
             ))}
           </div>

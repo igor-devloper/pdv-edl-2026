@@ -10,21 +10,34 @@ export async function GET(req: Request) {
     const url = new URL(req.url)
     const sellerUserId = url.searchParams.get("sellerUserId")
     const productId    = url.searchParams.get("productId")
-    const minValue     = Number(url.searchParams.get("minValue") || 0) * 100
-    const maxValue     = Number(url.searchParams.get("maxValue") || 0) * 100
+    const dateFrom     = url.searchParams.get("dateFrom") // ISO string completa, ex: "2024-01-01T00:00:00.000Z"
+    const dateTo       = url.searchParams.get("dateTo")   // ISO string completa, ex: "2024-01-31T23:59:59.999Z"
+
+    // minValue/maxValue chegam em reais (ex: "10.5") — convertemos para cents aqui, uma única vez
+    const minValueRaw = url.searchParams.get("minValue")
+    const maxValueRaw = url.searchParams.get("maxValue")
+    const minCents = minValueRaw ? Math.round(Number(minValueRaw) * 100) : undefined
+    const maxCents = maxValueRaw ? Math.round(Number(maxValueRaw) * 100) : undefined
 
     const sales = await prisma.sale.findMany({
       where: {
         status: "PAID",
         ...(sellerUserId && { sellerUserId }),
-        ...(minValue || maxValue ? {
+        ...((minCents !== undefined || maxCents !== undefined) && {
           totalCents: {
-            ...(minValue && { gte: minValue }),
-            ...(maxValue && { lte: maxValue }),
+            ...(minCents !== undefined && { gte: minCents }),
+            ...(maxCents !== undefined && { lte: maxCents }),
           },
-        } : {}),
+        }),
         ...(productId && {
           items: { some: { productId: Number(productId) } },
+        }),
+        // Filtro de data aplicado ao createdAt
+        ...((dateFrom || dateTo) && {
+          createdAt: {
+            ...(dateFrom && { gte: new Date(dateFrom) }),
+            ...(dateTo   && { lte: new Date(dateTo)   }),
+          },
         }),
       },
       include: {
@@ -48,21 +61,16 @@ export async function GET(req: Request) {
       },
     })
 
-    const totalCents = sales.reduce((sum, s) => sum + s.totalCents, 0)
-    const total      = totalCents / 100
-    const quantidade = sales.length
+    const totalCents  = sales.reduce((sum, s) => sum + s.totalCents, 0)
+    const total       = totalCents / 100
+    const quantidade  = sales.length
     const ticketMedio = quantidade ? total / quantidade : 0
 
     // ─── Custo e Lucro ──────────────────────────────────────────────────────
-    // Para produtos simples: product.costCents * item.qty
-    // Para combos: soma o costCents de cada ComboItem (product.costCents * comboItem.qty)
-    //              multiplicado pela quantidade de combos vendidos (item.qty)
-    //              Se o combo tiver costCents próprio cadastrado, usa ele como fallback
     let totalCustoCents = 0
     for (const sale of sales) {
       for (const item of sale.items) {
         if (item.combo) {
-          // Tenta somar custo item a item dentro do combo
           const comboItems = item.combo.items
           if (comboItems.length > 0) {
             const custoPorCombo = comboItems.reduce((sum, ci) => {
@@ -70,7 +78,6 @@ export async function GET(req: Request) {
             }, 0)
             totalCustoCents += custoPorCombo * item.qty
           } else {
-            // Fallback: costCents do combo direto (caso não tenha itens carregados)
             totalCustoCents += (item.combo.costCents ?? 0) * item.qty
           }
         } else if (item.product) {
@@ -154,14 +161,31 @@ export async function GET(req: Request) {
         })
     )
 
-    // ─── Período ─────────────────────────────────────────────────────────────
-    const now  = new Date()
-    const from = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}`
+    // ─── Período — reflete os filtros reais aplicados ─────────────────────
+    // Se o usuário passou datas, usa-as como período exibido.
+    // Caso contrário, deriva do range real das vendas encontradas.
+    let periodoFrom: string
+    let periodoTo: string
+
+    if (dateFrom) {
+      periodoFrom = new Date(dateFrom).toLocaleDateString("pt-BR")
+    } else if (sales.length > 0) {
+      const minDate = new Date(Math.min(...sales.map((s) => new Date(s.createdAt).getTime())))
+      periodoFrom = minDate.toLocaleDateString("pt-BR")
+    } else {
+      periodoFrom = new Date().toLocaleDateString("pt-BR")
+    }
+
+    if (dateTo) {
+      periodoTo = new Date(dateTo).toLocaleDateString("pt-BR")
+    } else {
+      periodoTo = new Date().toLocaleDateString("pt-BR")
+    }
 
     return NextResponse.json({
-      periodo: { from, to: from },
-      vendas:  { quantidade, total, ticketMedio },
-      lucro:   { totalCusto, lucro, margemPct },
+      periodo:       { from: periodoFrom, to: periodoTo },
+      vendas:        { quantidade, total, ticketMedio },
+      lucro:         { totalCusto, lucro, margemPct },
       pagamentos,
       topProdutos,
       topVendedores,
