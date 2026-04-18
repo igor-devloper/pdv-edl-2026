@@ -19,6 +19,7 @@ import {
   TrendingUp, X, CheckCircle, XCircle, AlertTriangle, Eye, EyeOff,
   Trophy, DollarSign, ShoppingBag, Building2, LayoutDashboard, Layers,
 } from "lucide-react"
+import { ExportVendasButton } from "@/components/export-vendas-button"
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type VendaItem = {
@@ -146,11 +147,11 @@ function TabMetricas() {
   // dateFrom/dateTo como ISO string completa
   const query = new URLSearchParams({
     ...(sellerUserId && { sellerUserId }),
-    ...(productId    && { productId }),
-    ...(minValue     && { minValue }),
-    ...(maxValue     && { maxValue }),
-    ...(dateFrom     && { dateFrom: new Date(dateFrom + "T00:00:00").toISOString() }),
-    ...(dateTo       && { dateTo:   new Date(dateTo   + "T23:59:59").toISOString() }),
+    ...(productId && { productId }),
+    ...(minValue && { minValue }),
+    ...(maxValue && { maxValue }),
+    ...(dateFrom && { dateFrom: new Date(dateFrom + "T00:00:00").toISOString() }),
+    ...(dateTo && { dateTo: new Date(dateTo + "T23:59:59").toISOString() }),
   }).toString()
 
   const { data: usersData } = useSWR<UsuariosResp>("/api/igor/usuarios", fetcher)
@@ -163,11 +164,11 @@ function TabMetricas() {
   const vendasQuery = new URLSearchParams({
     take: "20",
     ...(sellerUserId && { sellerUserId }),
-    ...(productId    && { productId }),
-    ...(minValue     && { minCents: String(Math.round(Number(minValue) * 100)) }),
-    ...(maxValue     && { maxCents: String(Math.round(Number(maxValue) * 100)) }),
-    ...(dateFrom     && { dateFrom: new Date(dateFrom + "T00:00:00").toISOString() }),
-    ...(dateTo       && { dateTo:   new Date(dateTo   + "T23:59:59").toISOString() }),
+    ...(productId && { productId }),
+    ...(minValue && { minCents: String(Math.round(Number(minValue) * 100)) }),
+    ...(maxValue && { maxCents: String(Math.round(Number(maxValue) * 100)) }),
+    ...(dateFrom && { dateFrom: new Date(dateFrom + "T00:00:00").toISOString() }),
+    ...(dateTo && { dateTo: new Date(dateTo + "T23:59:59").toISOString() }),
   }).toString()
 
   const { data: vendasData } = useSWR<ApiResp>(
@@ -632,8 +633,8 @@ function TabNucleos() {
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl shadow-sm ${isTop3
-                          ? ["bg-gradient-to-br from-yellow-300 to-amber-400", "bg-gradient-to-br from-gray-200 to-gray-300", "bg-gradient-to-br from-orange-300 to-amber-400"][idx]
-                          : "bg-gradient-to-br from-yellow-50 to-amber-50"
+                        ? ["bg-gradient-to-br from-yellow-300 to-amber-400", "bg-gradient-to-br from-gray-200 to-gray-300", "bg-gradient-to-br from-orange-300 to-amber-400"][idx]
+                        : "bg-gradient-to-br from-yellow-50 to-amber-50"
                         }`}>
                         {isTop3 ? <span className="text-lg">{TROPHY_EMOJIS[idx]}</span>
                           : <span className="text-sm font-black text-gray-500">{idx + 1}º</span>}
@@ -950,6 +951,7 @@ function TabVendas() {
 
       {/* Controles */}
       <div className="flex items-center gap-2 flex-wrap">
+        <ExportVendasButton filters={applied} />
         <Button variant="outline" size="sm" onClick={() => mutate()}
           className="rounded-full border-yellow-300 text-yellow-700 hover:bg-yellow-50">
           <RefreshCw className="h-3.5 w-3.5 mr-1.5" />Atualizar
